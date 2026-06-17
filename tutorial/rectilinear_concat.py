@@ -434,25 +434,55 @@ def open_matrix(repo_path: str):
     return _csr(_open_root(repo_path)[MATRIX_GROUP])
 
 
-def select_cells(repo_path: str, obs_indices):
+def select_cells(repo_path: str, obs_indices, workers: int = 32):
     """Read an arbitrary set of cells (rows) as a CSR submatrix, lazily.
 
     Because the whole collection is one logical `X`, a selection that mixes cells
     from different source files is just a row gather: `obs_indices` can span file
-    boundaries freely. Only the chunks covering the requested rows are fetched
+    boundaries freely. Only the byte ranges covering the requested rows are fetched
     from the source files — the rest of the matrix is never read.
+
+    The fetch is concurrent: requested rows are coalesced into contiguous runs and
+    each run's bytes are pulled in parallel (`workers` threads). The reads are
+    latency-bound range requests, so a scattered selection of thousands of cells
+    streams in seconds rather than minutes. Rows are returned in the order given.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     from scipy import sparse
 
     x = _open_root(repo_path)[MATRIX_GROUP]
-    indptr = x["indptr"][:]  # small (one int per cell); the bulk stays on disk
+    indptr = x["indptr"][:]  # small (one int per cell); the bulk stays remote
     data, indices = x["data"], x["indices"]
+
+    order = np.argsort(np.asarray(obs_indices), kind="stable")
+    rows = np.asarray(obs_indices)[order]
+    breaks = np.flatnonzero(np.diff(rows) != 1)  # contiguous runs -> one read each
+    run_bounds = zip(np.r_[0, breaks + 1], np.r_[breaks, rows.size - 1])
+
+    def fetch(bounds):  # read a whole run's bytes in a single range request
+        r0, r1 = int(rows[bounds[0]]), int(rows[bounds[1]])
+        a, b = int(indptr[r0]), int(indptr[r1 + 1])
+        local_ip = indptr[r0 : r1 + 2] - a
+        return data[a:b], indices[a:b], local_ip
+
+    cells: list = [None] * rows.size  # per-cell (data, indices), in sorted order
+    sorted_pos = 0
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for d_run, i_run, ip in ex.map(fetch, run_bounds):
+            for k in range(len(ip) - 1):
+                s, e = int(ip[k]), int(ip[k + 1])
+                cells[sorted_pos] = (d_run[s:e], i_run[s:e])
+                sorted_pos += 1
+
+    inv = np.empty(rows.size, dtype=np.intp)  # restore the caller's row order
+    inv[order] = np.arange(rows.size)
     rows_d, rows_i, new_indptr = [], [], [0]
-    for r in obs_indices:
-        s, e = int(indptr[r]), int(indptr[r + 1])
-        rows_d.append(data[s:e])
-        rows_i.append(indices[s:e])
-        new_indptr.append(new_indptr[-1] + (e - s))
+    for p in inv:
+        d, i = cells[p]
+        rows_d.append(d)
+        rows_i.append(i)
+        new_indptr.append(new_indptr[-1] + d.size)
     n_var = int(x.attrs["shape"][1])
     return sparse.csr_matrix(
         (np.concatenate(rows_d), np.concatenate(rows_i), np.array(new_indptr)),
