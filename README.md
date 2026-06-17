@@ -17,6 +17,8 @@ uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --r
 
 - **[virtualize_h5ad_collection.ipynb](virtualize_h5ad_collection.ipynb)** — the
   runnable notebook walkthrough (start here).
+- **[virtualize_allen_collection.ipynb](virtualize_allen_collection.ipynb)** — the
+  same workflow on a real study (Allen Institute Human Immune Health Atlas).
 - **[tutorial/TUTORIAL.md](tutorial/TUTORIAL.md)** — the same walkthrough as prose.
 - **[tutorial/rectilinear_concat.py](tutorial/rectilinear_concat.py)** —
   `virtualize_matrix` / `open_matrix`: the whole collection as one logical `X`.
