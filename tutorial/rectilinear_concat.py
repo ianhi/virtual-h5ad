@@ -18,6 +18,10 @@ from __future__ import annotations
 
 import os
 
+# Icechunk's Rust backend logs a LocalFileSystem warning on every commit; quiet it
+# so notebooks stay readable. Set before icechunk is imported; respects an override.
+os.environ.setdefault("ICECHUNK_LOG", "off")
+
 import numpy as np
 import zarr
 from obspec_utils.registry import ObjectStoreRegistry
