@@ -1,5 +1,6 @@
 # Project data + scratch (large h5ad files, icechunk repos)
 data/
+!data/README.md
 repo/
 *.icechunk/
 .icechunk/
