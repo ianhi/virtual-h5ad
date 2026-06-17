@@ -61,7 +61,7 @@ def main():
 
     print("== virtually concatenate data + indices into one rectilinear array each ==")
     reg = _registry(ROOT)
-    parsed = [manifest_arrays(p, ("data", "indices"), reg) for p in SHARDS]
+    parsed = [manifest_arrays(f"file://{p}", ("data", "indices"), reg) for p in SHARDS]
     for name in ["data", "indices"]:
         counts = write_concat_virtual_array(
             store, name, [pa[name] for pa in parsed], SHARDS
