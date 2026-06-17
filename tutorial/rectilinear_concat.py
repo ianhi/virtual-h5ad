@@ -302,17 +302,19 @@ def select_cells(repo_path: str, obs_indices):
 
 
 def open_anndata(repo_path: str):
-    """Open the repo as a complete AnnData: virtual X + obs/var from the sources.
+    """Open the repo as an AnnData with a lazy, virtual X over the whole collection.
 
-    X is read on demand from the original files via Icechunk; obs (concatenated)
-    and var (shared) are loaded from those same files, so you get a normal,
-    queryable AnnData with no bulk copy of the matrix.
+    X is a backed sparse dataset: opening reads no expression data, and slicing
+    (``adata[rows]``) fetches only those rows' chunks from the original files.
+    obs (concatenated) and var (shared) are loaded from those files so you get a
+    normal, queryable AnnData. Call ``adata.to_memory()`` to materialize all of X.
     """
     import anndata as ad
+    import anndata.io as aio
     import pandas as pd
 
     root = _open_root(repo_path)
     sources = list(root.attrs["source_files"])
     obs = pd.concat([ad.read_h5ad(p, backed="r").obs for p in sources])
     var = ad.read_h5ad(sources[0], backed="r").var
-    return ad.AnnData(X=_csr(root[MATRIX_GROUP]), obs=obs, var=var)
+    return ad.AnnData(X=aio.sparse_dataset(root[MATRIX_GROUP]), obs=obs, var=var)
