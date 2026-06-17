@@ -25,18 +25,24 @@ ALLEN = os.path.abspath("data/allen")
 
 
 def dir_bytes(p):
-    return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(p) for f in fs)
+    return sum(
+        os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(p) for f in fs
+    )
 
 
 def main():
     paths = sorted(glob.glob(f"{ALLEN}/*.h5ad"))
     if not paths:
-        raise SystemExit("no files in data/allen — see download commands in this file's docstring")
+        raise SystemExit(
+            "no files in data/allen — see download commands in this file's docstring"
+        )
     print("collection:", [os.path.basename(p) for p in paths])
 
     virtualize_matrix(ALLEN, "repo/allen")
     src, repo = dir_bytes(ALLEN), dir_bytes(os.path.abspath("repo/allen"))
-    print(f"  {src/1e6:.0f} MB sources -> {repo/1e3:.0f} KB repo ({src//repo}x smaller)")
+    print(
+        f"  {src / 1e6:.0f} MB sources -> {repo / 1e3:.0f} KB repo ({src // repo}x smaller)"
+    )
 
     X = open_matrix("repo/allen")
     print(f"  combined X: {X.shape} nnz={X.nnz}")
@@ -44,7 +50,9 @@ def main():
     for p in paths:  # same (sorted) order virtualize_matrix used
         sx = ad.read_h5ad(p).X
         block = X[row : row + sx.shape[0]]
-        print(f"  {os.path.basename(p):22s} rows {row}..{row + sx.shape[0]:<7} match={(block != sx).nnz == 0}")
+        print(
+            f"  {os.path.basename(p):22s} rows {row}..{row + sx.shape[0]:<7} match={(block != sx).nnz == 0}"
+        )
         row += sx.shape[0]
 
 

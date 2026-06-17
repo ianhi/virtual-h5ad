@@ -56,7 +56,9 @@ def main():
     repo_path = os.path.abspath("repo/exp01")
     config = ic.RepositoryConfig.default()
     config.set_virtual_chunk_container(
-        ic.VirtualChunkContainer(f"file://{DATA}/", ic.local_filesystem_store(f"{DATA}/"))
+        ic.VirtualChunkContainer(
+            f"file://{DATA}/", ic.local_filesystem_store(f"{DATA}/")
+        )
     )
     creds = ic.containers_credentials({f"file://{DATA}/": None})
     repo = ic.Repository.create(
@@ -86,7 +88,9 @@ def main():
     with h5py.File(SRC) as f:
         for n in SPARSE_ARRAYS:
             got, want = xg[n][:], f[f"X/{n}"][:]
-            print(f"  X/{n:8s} match={np.array_equal(got, want)} (n={got.size}, {got.dtype})")
+            print(
+                f"  X/{n:8s} match={np.array_equal(got, want)} (n={got.size}, {got.dtype})"
+            )
 
 
 if __name__ == "__main__":

@@ -14,7 +14,6 @@ import os
 
 import h5py
 import icechunk as ic
-import numpy as np
 import xarray as xr
 import zarr
 from obspec_utils.registry import ObjectStoreRegistry
@@ -58,13 +57,17 @@ def show_concat_fails():
     datas = []
     for p in SHARDS:
         parser = HDFParser(group="X", drop_variables=["indices", "indptr"])
-        datas.append(open_virtual_dataset(url=f"file://{p}", registry=registry(), parser=parser))
+        datas.append(
+            open_virtual_dataset(url=f"file://{p}", registry=registry(), parser=parser)
+        )
     try:
         xr.concat(datas, dim="phony_dim_0")
         print("  concat succeeded (unexpected)")
     except Exception as e:
         print(f"  [expected FAIL] {type(e).__name__}: {str(e)[:130]}")
-        print("  -> ragged/heterogeneous chunk grids can't form one regular Zarr array.")
+        print(
+            "  -> ragged/heterogeneous chunk grids can't form one regular Zarr array."
+        )
 
 
 def build_repo():
@@ -72,7 +75,9 @@ def build_repo():
     repo_path = os.path.abspath("repo/exp03")
     config = ic.RepositoryConfig.default()
     config.set_virtual_chunk_container(
-        ic.VirtualChunkContainer(f"file://{DATA}/", ic.local_filesystem_store(f"{DATA}/"))
+        ic.VirtualChunkContainer(
+            f"file://{DATA}/", ic.local_filesystem_store(f"{DATA}/")
+        )
     )
     creds = ic.containers_credentials({f"file://{DATA}/": None})
     repo = ic.Repository.create(
@@ -98,7 +103,8 @@ def verify(repo, repo_path):
         xg = root[f"sample_{i}/X"]
         mats.append(
             sparse.csr_matrix(
-                (xg["data"][:], xg["indices"][:], xg["indptr"][:]), shape=tuple(xg.attrs["shape"])
+                (xg["data"][:], xg["indices"][:], xg["indptr"][:]),
+                shape=tuple(xg.attrs["shape"]),
             )
         )
     big = sparse.vstack(mats).tocsr()
@@ -109,9 +115,13 @@ def verify(repo, repo_path):
     print(f"  equals original AnnData.X: {(big != ref).nnz == 0}")
     src = sum(os.path.getsize(p) for p in SHARDS)
     repo_sz = sum(
-        os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(repo_path) for f in fs
+        os.path.getsize(os.path.join(r, f))
+        for r, _, fs in os.walk(repo_path)
+        for f in fs
     )
-    print(f"  source files: {src/1e6:.1f} MB   repo: {repo_sz/1e3:.0f} KB (refs only)")
+    print(
+        f"  source files: {src / 1e6:.1f} MB   repo: {repo_sz / 1e3:.0f} KB (refs only)"
+    )
 
 
 def main():

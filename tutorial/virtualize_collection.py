@@ -43,7 +43,9 @@ def virtual_csr(path: str) -> xr.Dataset:
     url = f"file://{os.path.abspath(path)}"
     parts = []
     for name in CSR_ARRAYS:
-        parser = HDFParser(group="X", drop_variables=[n for n in CSR_ARRAYS if n != name])
+        parser = HDFParser(
+            group="X", drop_variables=[n for n in CSR_ARRAYS if n != name]
+        )
         vds = open_virtual_dataset(url=url, registry=_registry(root), parser=parser)
         parts.append(vds.rename({d: f"{name}_dim" for d in vds.dims}))
     return xr.merge(parts)
@@ -73,7 +75,9 @@ def virtualize_collection(paths: list[str], repo_path: str) -> str:
     root = source_root(paths)
     config = ic.RepositoryConfig.default()
     config.set_virtual_chunk_container(
-        ic.VirtualChunkContainer(f"file://{root}/", ic.local_filesystem_store(f"{root}/"))
+        ic.VirtualChunkContainer(
+            f"file://{root}/", ic.local_filesystem_store(f"{root}/")
+        )
     )
     creds = ic.containers_credentials({f"file://{root}/": None})
     repo = ic.Repository.create(
@@ -114,7 +118,8 @@ def stack_csr(group):
         x = group[f"{s}/X"]
         mats.append(
             sparse.csr_matrix(
-                (x["data"][:], x["indices"][:], x["indptr"][:]), shape=tuple(x.attrs["shape"])
+                (x["data"][:], x["indices"][:], x["indptr"][:]),
+                shape=tuple(x.attrs["shape"]),
             )
         )
     return sparse.vstack(mats).tocsr()
