@@ -4,8 +4,14 @@ import nbformat as nbf
 
 nb = nbf.v4.new_notebook()
 c = []
-md = lambda s: c.append(nbf.v4.new_markdown_cell(s))
-code = lambda s: c.append(nbf.v4.new_code_cell(s))
+
+
+def md(s):
+    c.append(nbf.v4.new_markdown_cell(s))
+
+
+def code(s):
+    c.append(nbf.v4.new_code_cell(s))
 
 md("""\
 # Querying a 10 GB cell atlas without loading it
