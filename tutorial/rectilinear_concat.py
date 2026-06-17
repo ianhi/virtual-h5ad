@@ -122,15 +122,32 @@ def _combined_indptr(paths: list[str]):
     return np.concatenate(out), n_var
 
 
-def virtualize_matrix(paths: list[str], repo_path: str) -> str:
+def _resolve_paths(source) -> list[str]:
+    """Accept a list of files, a glob string, or a directory of .h5ad files."""
+    import glob as _glob
+
+    if isinstance(source, (list, tuple)):
+        paths = list(source)
+    elif os.path.isdir(source):
+        paths = sorted(_glob.glob(os.path.join(source, "*.h5ad")))
+    else:
+        paths = sorted(_glob.glob(source))
+    if not paths:
+        raise FileNotFoundError(f"no .h5ad files matched: {source!r}")
+    return [os.path.abspath(p) for p in paths]
+
+
+def virtualize_matrix(source, repo_path: str) -> str:
     """Reference a collection's X as ONE virtual CSR matrix in a new Icechunk repo.
 
+    `source` may be a list of files, a glob (``"dir/*.h5ad"``), or a directory.
     `data`/`indices` become single rectilinear virtual arrays spanning all files;
     `indptr` is recomputed and written native. Returns the snapshot id.
     """
     import icechunk as ic
 
-    root = os.path.commonpath([os.path.dirname(os.path.abspath(p)) for p in paths])
+    paths = _resolve_paths(source)
+    root = os.path.commonpath([os.path.dirname(p) for p in paths])
     config = ic.RepositoryConfig.default()
     config.set_virtual_chunk_container(
         ic.VirtualChunkContainer(f"file://{root}/", ic.local_filesystem_store(f"{root}/"))
@@ -152,20 +169,56 @@ def virtualize_matrix(paths: list[str], repo_path: str) -> str:
         {"encoding-type": "csr_matrix", "encoding-version": "0.1.0",
          "shape": [int(indptr.size - 1), n_var]}
     )
+    # record sources so a reader can reattach obs/var without being told where they are
+    g.attrs["source_files"] = paths
     return session.commit(f"one virtual X over {len(paths)} files")
 
 
-def open_matrix(repo_path: str, source_root: str):
-    """Open the repo and return X as one scipy CSR matrix (rows read on demand)."""
+def open_repo(repo_path: str):
+    """Open an Icechunk repo, self-authorizing every virtual container it declares.
+
+    The container prefixes are stored in the repo config, so a reader needs no
+    prior knowledge of where the source files live (local prefixes use no creds).
+    """
     import icechunk as ic
+
+    storage = ic.local_filesystem_storage(os.path.abspath(repo_path))
+    prefixes = ic.Repository.open(storage=storage).config.virtual_chunk_containers
+    return ic.Repository.open(
+        storage=storage,
+        authorize_virtual_chunk_access=ic.containers_credentials(
+            {p: None for p in prefixes}
+        ),
+    )
+
+
+def open_matrix(repo_path: str):
+    """Open the repo and return X as one scipy CSR matrix (rows read on demand).
+
+    No flags or source paths to set — the module enables rectilinear chunks on
+    import and `open_repo` self-authorizes from the repo's own config.
+    """
     from scipy import sparse
 
-    prefix = f"file://{os.path.abspath(source_root)}/"
-    repo = ic.Repository.open(
-        storage=ic.local_filesystem_storage(os.path.abspath(repo_path)),
-        authorize_virtual_chunk_access=ic.containers_credentials({prefix: None}),
-    )
-    x = zarr.open_group(repo.readonly_session("main").store, mode="r")["X"]
+    x = zarr.open_group(open_repo(repo_path).readonly_session("main").store, mode="r")["X"]
     return sparse.csr_matrix(
         (x["data"][:], x["indices"][:], x["indptr"][:]), shape=tuple(x.attrs["shape"])
     )
+
+
+def open_anndata(repo_path: str):
+    """Open the repo as a complete AnnData: virtual X + obs/var from the sources.
+
+    X is read on demand from the original files via Icechunk; obs (concatenated)
+    and var (shared) are loaded from those same files, so you get a normal,
+    queryable AnnData with no bulk copy of the matrix.
+    """
+    import anndata as ad
+    import pandas as pd
+
+    root = zarr.open_group(open_repo(repo_path).readonly_session("main").store, mode="r")
+    X = open_matrix(repo_path)
+    sources = list(root.attrs["source_files"])
+    obs = pd.concat([ad.read_h5ad(p, backed="r").obs for p in sources])
+    var = ad.read_h5ad(sources[0], backed="r").var
+    return ad.AnnData(X=X, obs=obs, var=var)
