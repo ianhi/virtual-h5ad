@@ -77,12 +77,14 @@ def _download(
     import obstore
     from obstore.store import HTTPStore
 
+    dest = os.path.join(dest_dir, _name(url))
+    if os.path.exists(dest):
+        return dest  # reuse a cached copy
     base = url.rsplit("/", 1)[0] + "/"
     name = _name(url)
     store = HTTPStore.from_url(base)
     size = obstore.head(store, name)["size"]
     starts = list(range(0, size, block))
-    dest = os.path.join(dest_dir, name)
     with open(dest, "wb") as f:
         for i in range(0, len(starts), batch):  # bounded memory: batch*block in flight
             grp = starts[i : i + batch]
@@ -239,7 +241,11 @@ def _resolve_paths(source) -> list[str]:
 
 
 def virtualize_matrix(
-    source, repo_path: str, overwrite: bool = True, download: bool = True
+    source,
+    repo_path: str,
+    overwrite: bool = True,
+    download: bool = True,
+    cache_dir: str | None = None,
 ) -> str:
     """Reference a collection's X as ONE virtual CSR matrix in a new Icechunk repo.
 
@@ -248,11 +254,13 @@ def virtualize_matrix(
     `indptr` and obs/var are written into the repo. Returns the snapshot id.
 
     For remote (`http(s)://`) sources there are two indexing strategies:
-      - `download=True` (default): fetch each file once (a single sequential GET),
-        index the local copy, then delete it. Far faster and kinder to the server
-        than walking the HDF5 chunk index over thousands of HTTP range requests.
+      - `download=True` (default): fetch each file once (parallel range GETs),
+        index the local copy. Far faster and kinder to the server than walking the
+        HDF5 chunk index over thousands of HTTP range requests.
       - `download=False`: parse directly over HTTP without downloading — slower,
         but needs no local scratch space.
+    `cache_dir` keeps the downloaded copies there (reused on re-run, not deleted) —
+    handy for verification; otherwise downloads go to a temp dir that is removed.
     Either way the repo references the remote URLs, so downstream reads stream only
     the cells touched. `overwrite` (default True) makes the call safe to re-run.
     """
@@ -266,11 +274,15 @@ def virtualize_matrix(
     published = _resolve_paths(source)  # the URLs/paths the repo will reference
     remote = _is_remote(published[0])
 
-    scratch = tempfile.mkdtemp(prefix="vh5ad_") if (remote and download) else None
+    # downloads go to cache_dir (kept) or a temp dir (deleted in finally)
+    scratch = None
+    if remote and download:
+        dl_dir = cache_dir or (scratch := tempfile.mkdtemp(prefix="vh5ad_"))
+        os.makedirs(dl_dir, exist_ok=True)
     reader_factory = None
     try:
         if remote and download:  # fetch once, index locally
-            read_paths = [_download(u, scratch) for u in published]
+            read_paths = [_download(u, dl_dir) for u in published]
             parse_urls = [f"file://{p}" for p in read_paths]
             registry = _registry(
                 os.path.commonpath([os.path.dirname(p) for p in read_paths])
