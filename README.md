@@ -19,6 +19,9 @@ uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --r
   runnable notebook walkthrough (start here).
 - **[virtualize_allen_collection.ipynb](virtualize_allen_collection.ipynb)** — the
   same workflow on a real study (Allen Institute Human Immune Health Atlas).
+- **[query_cloud_atlas.ipynb](query_cloud_atlas.ipynb)** — the reader's payoff:
+  query a 10 GB CELLxGENE atlas through a 31 MB repo, reading only the cells you
+  select (free metadata, targeted streaming).
 - **[tutorial/TUTORIAL.md](tutorial/TUTORIAL.md)** — the same walkthrough as prose.
 - **[tutorial/rectilinear_concat.py](tutorial/rectilinear_concat.py)** —
   `virtualize_matrix` / `open_matrix`: the whole collection as one logical `X`.
