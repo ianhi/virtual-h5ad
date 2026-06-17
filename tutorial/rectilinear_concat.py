@@ -105,3 +105,67 @@ def _VChunk(index, location, offset, length):
     return ic.VirtualChunkSpec(
         index=list(index), location=location, offset=offset, length=length
     )
+
+
+def _combined_indptr(paths: list[str]):
+    """Vertically-stacked CSR indptr: each file's row pointers shifted by prior nnz."""
+    import h5py
+
+    out = [np.array([0], dtype="int64")]
+    nnz, n_var = 0, None
+    for p in paths:
+        with h5py.File(p) as f:
+            ip = f["X/indptr"][:]
+            n_var = int(f["X"].attrs["shape"][1])
+        out.append(ip[1:].astype("int64") + nnz)
+        nnz += int(ip[-1])
+    return np.concatenate(out), n_var
+
+
+def virtualize_matrix(paths: list[str], repo_path: str) -> str:
+    """Reference a collection's X as ONE virtual CSR matrix in a new Icechunk repo.
+
+    `data`/`indices` become single rectilinear virtual arrays spanning all files;
+    `indptr` is recomputed and written native. Returns the snapshot id.
+    """
+    import icechunk as ic
+
+    root = os.path.commonpath([os.path.dirname(os.path.abspath(p)) for p in paths])
+    config = ic.RepositoryConfig.default()
+    config.set_virtual_chunk_container(
+        ic.VirtualChunkContainer(f"file://{root}/", ic.local_filesystem_store(f"{root}/"))
+    )
+    repo = ic.Repository.create(
+        storage=ic.local_filesystem_storage(os.path.abspath(repo_path)),
+        config=config,
+        authorize_virtual_chunk_access=ic.containers_credentials({f"file://{root}/": None}),
+    )
+    session = repo.writable_session("main")
+    for name in ("data", "indices"):
+        write_concat_virtual_array(session.store, "X", name, paths, root)
+    indptr, n_var = _combined_indptr(paths)
+    g = zarr.open_group(session.store, mode="r+")
+    g.create_array(name="X/indptr", shape=indptr.shape, dtype=indptr.dtype, chunks=indptr.shape)[
+        :
+    ] = indptr
+    g["X"].attrs.update(
+        {"encoding-type": "csr_matrix", "encoding-version": "0.1.0",
+         "shape": [int(indptr.size - 1), n_var]}
+    )
+    return session.commit(f"one virtual X over {len(paths)} files")
+
+
+def open_matrix(repo_path: str, source_root: str):
+    """Open the repo and return X as one scipy CSR matrix (rows read on demand)."""
+    import icechunk as ic
+    from scipy import sparse
+
+    prefix = f"file://{os.path.abspath(source_root)}/"
+    repo = ic.Repository.open(
+        storage=ic.local_filesystem_storage(os.path.abspath(repo_path)),
+        authorize_virtual_chunk_access=ic.containers_credentials({prefix: None}),
+    )
+    x = zarr.open_group(repo.readonly_session("main").store, mode="r")["X"]
+    return sparse.csr_matrix(
+        (x["data"][:], x["indices"][:], x["indptr"][:]), shape=tuple(x.attrs["shape"])
+    )

@@ -74,17 +74,36 @@ group per sample**, all arrays virtual. Tutorial:
 [`tutorial/TUTORIAL.md`](tutorial/TUTORIAL.md). On a 3-shard pbmc3k: 11 MB
 sources → 60 KB repo; stacking the samples reproduces the original `X` exactly.
 
-**You cannot concatenate the CSR arrays into one virtual array.** Each file
-chunks `data`/`indices` differently and ends on a partial chunk; a single Zarr
-array needs a regular chunk grid. VirtualiZarr is explicit:
+### Two layouts
+
+**(a) Group per sample** (experiment 03) — simplest; stack at read time.
+VirtualiZarr's own concat refuses to merge the CSR arrays:
 
 ```
 ValueError: Cannot concatenate arrays with inconsistent chunk shapes:
 (5973,) vs (5939,). Requires ZEP003 (Variable-length Chunks).
 ```
 
-So the collection stays group-per-sample and stacks at read time (the stack is
-tiny; the matrix bytes stay virtual).
+**(b) One logical `X` via rectilinear chunks** (experiment 04) — the better
+result. That ZEP003 limit is *VirtualiZarr's regular-grid assumption, not a real
+wall*: Zarr now ships rectilinear (variable-length) chunk grids
+([flag](https://github.com/zarr-developers/zarr-python): `array.rectilinear_chunks`),
+and Icechunk stores refs by chunk coordinate regardless of grid. So we bypass
+VirtualiZarr's concat and assemble the array ourselves
+([`tutorial/rectilinear_concat.py`](tutorial/rectilinear_concat.py)):
+
+- Combined chunk grid = every file's HDF5 chunk edges laid end to end.
+- Each full chunk → a virtual reference to the source bytes.
+- HDF5 pads every array's **final** chunk to full size (5939 stored, 5918
+  valid). That padding would leak across a file boundary, so each file's tail
+  chunk is materialized as one **native** chunk holding only its valid elements.
+- `data`/`indices` concatenate by bytes (column indices are unchanged — same
+  genes); `indptr` is recomputed with per-file offsets and written native.
+
+Result on 3-shard pbmc3k: a single `X` (2700×32738), **381 virtual + 3 native
+chunks** per array (~99% of bytes stay referenced), 11 MB → 100 KB repo,
+reconstructs the original matrix exactly, and a lazy row slice reads only the
+bytes it needs. **Readers must enable** `zarr.config.set({'array.rectilinear_chunks': True})`.
 
 **Container prefix must match on read.** Icechunk gates virtual reads: the
 reader must `authorize_virtual_chunk_access` for the same source-directory prefix
