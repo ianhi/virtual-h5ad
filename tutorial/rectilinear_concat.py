@@ -77,7 +77,9 @@ def _download(
     import obstore
     from obstore.store import HTTPStore
 
-    dest = os.path.join(dest_dir, _name(url))
+    # absolute: a relative path makes file://<rel> parse its first segment as a
+    # host, which breaks registry prefix-stripping (path doubling) downstream.
+    dest = os.path.abspath(os.path.join(dest_dir, _name(url)))
     if os.path.exists(dest):
         return dest  # reuse a cached copy
     base = url.rsplit("/", 1)[0] + "/"
