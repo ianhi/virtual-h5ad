@@ -63,22 +63,40 @@ def _open_h5(path: str):
     return h5py.File(path)
 
 
-def _download(url: str, dest_dir: str) -> str:
-    """Fetch a remote file once (a single sequential GET) for local indexing.
+def _download(
+    url: str, dest_dir: str, block: int = 32 * 1024 * 1024, batch: int = 16
+) -> str:
+    """Fetch a remote file once via parallel range requests, for local indexing.
 
     Indexing HDF5 means walking its chunk B-tree, whose metadata is scattered
     through the file; doing that over HTTP is thousands of latency-bound range
-    requests. One sequential download + a local parse is far faster and kinder to
-    the server. The file is scratch — the repo only stores references to `url`.
+    requests. Pulling the whole file once — in `batch` concurrent `block`-sized
+    range GETs to saturate bandwidth — then parsing locally is far faster and
+    kinder to the server. The file is scratch; the repo only references `url`.
     """
-    import urllib.request
+    import obstore
+    from obstore.store import HTTPStore
 
-    dest = os.path.join(dest_dir, _name(url))
-    urllib.request.urlretrieve(url, dest)
+    base = url.rsplit("/", 1)[0] + "/"
+    name = _name(url)
+    store = HTTPStore.from_url(base)
+    size = obstore.head(store, name)["size"]
+    starts = list(range(0, size, block))
+    dest = os.path.join(dest_dir, name)
+    with open(dest, "wb") as f:
+        for i in range(0, len(starts), batch):  # bounded memory: batch*block in flight
+            grp = starts[i : i + batch]
+            parts = obstore.get_ranges(
+                store, name, starts=grp, lengths=[min(block, size - s) for s in grp]
+            )
+            for p in parts:
+                f.write(memoryview(p))
     return dest
 
 
-def manifest_arrays(url: str, names, registry: ObjectStoreRegistry, reader_factory=None) -> dict:
+def manifest_arrays(
+    url: str, names, registry: ObjectStoreRegistry, reader_factory=None
+) -> dict:
     """The VirtualiZarr ManifestArrays for the named CSR components of one file.
 
     One parse per file: `data` and `indices` share a length (nnz), so they open
