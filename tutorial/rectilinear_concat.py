@@ -78,18 +78,20 @@ def _download(url: str, dest_dir: str) -> str:
     return dest
 
 
-def manifest_arrays(url: str, names, registry: ObjectStoreRegistry) -> dict:
+def manifest_arrays(url: str, names, registry: ObjectStoreRegistry, reader_factory=None) -> dict:
     """The VirtualiZarr ManifestArrays for the named CSR components of one file.
 
     One parse per file: `data` and `indices` share a length (nnz), so they open
     together cleanly. (`indptr` has a different length and would collide on the
-    shared phony dimension, so it is never parsed alongside them.)
+    shared phony dimension, so it is never parsed alongside them.) `reader_factory`
+    lets the streaming path pass a buffered reader for fewer, larger requests.
     """
     drop = [a for a in CSR_ARRAYS if a not in names]
+    kw = {"reader_factory": reader_factory} if reader_factory is not None else {}
     vds = open_virtual_dataset(
         url=url,
         registry=registry,
-        parser=HDFParser(group=MATRIX_GROUP, drop_variables=drop),
+        parser=HDFParser(group=MATRIX_GROUP, drop_variables=drop, **kw),
     )
     return {n: vds[n].data for n in names}
 
@@ -247,6 +249,7 @@ def virtualize_matrix(
     remote = _is_remote(published[0])
 
     scratch = tempfile.mkdtemp(prefix="vh5ad_") if (remote and download) else None
+    reader_factory = None
     try:
         if remote and download:  # fetch once, index locally
             read_paths = [_download(u, scratch) for u in published]
@@ -254,12 +257,17 @@ def virtualize_matrix(
             registry = _registry(
                 os.path.commonpath([os.path.dirname(p) for p in read_paths])
             )
-        elif remote:  # stream: parse directly over HTTP
+        elif remote:  # stream: parse over HTTP, fetched in parallel blocks
+            from obspec_utils.readers import BufferedStoreReader
+            from obspec_utils.splitting import SplittingReadableStore
             from obstore.store import HTTPStore
 
             read_paths = parse_urls = published
             base = os.path.commonprefix(published).rsplit("/", 1)[0] + "/"
-            registry = ObjectStoreRegistry({base: HTTPStore.from_url(base)})
+            registry = ObjectStoreRegistry(
+                {base: SplittingReadableStore(HTTPStore.from_url(base))}
+            )
+            reader_factory = BufferedStoreReader  # fewer, larger, buffered reads
         else:  # local files
             read_paths = published
             parse_urls = [f"file://{p}" for p in read_paths]
@@ -294,7 +302,10 @@ def virtualize_matrix(
         session = repo.writable_session("main")
         store = session.store
 
-        parsed = [manifest_arrays(u, ("data", "indices"), registry) for u in parse_urls]
+        parsed = [
+            manifest_arrays(u, ("data", "indices"), registry, reader_factory)
+            for u in parse_urls
+        ]
         for name in ("data", "indices"):
             write_concat_virtual_array(
                 store, name, [pa[name] for pa in parsed], read_paths, published
