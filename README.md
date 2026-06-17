@@ -15,8 +15,9 @@ uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --r
 
 ## Layout
 
-- **[tutorial/TUTORIAL.md](tutorial/TUTORIAL.md)** — virtualize a *collection* of
-  h5ad files into one big matrix (start here).
+- **[virtualize_h5ad_collection.ipynb](virtualize_h5ad_collection.ipynb)** — the
+  runnable notebook walkthrough (start here).
+- **[tutorial/TUTORIAL.md](tutorial/TUTORIAL.md)** — the same walkthrough as prose.
 - **[tutorial/rectilinear_concat.py](tutorial/rectilinear_concat.py)** —
   `virtualize_matrix` / `open_matrix`: the whole collection as one logical `X`.
 - **[tutorial/virtualize_collection.py](tutorial/virtualize_collection.py)** —
