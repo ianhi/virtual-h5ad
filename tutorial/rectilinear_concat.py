@@ -169,15 +169,22 @@ def _resolve_paths(source) -> list[str]:
     return [os.path.abspath(p) for p in paths]
 
 
-def virtualize_matrix(source, repo_path: str) -> str:
+def virtualize_matrix(source, repo_path: str, overwrite: bool = True) -> str:
     """Reference a collection's X as ONE virtual CSR matrix in a new Icechunk repo.
 
     `source` may be a list of files, a glob (``"dir/*.h5ad"``), or a directory.
     `data`/`indices` become single rectilinear virtual arrays spanning all files;
     `indptr` is recomputed and written native. Returns the snapshot id.
+
+    `overwrite` (default True) replaces any existing repo at `repo_path` so the
+    call is safe to re-run; set False to require a clean path.
     """
+    import shutil
+
     import icechunk as ic
 
+    if overwrite and os.path.isdir(repo_path):
+        shutil.rmtree(repo_path)
     paths = _resolve_paths(source)
     _check_stackable(paths)
     root = os.path.commonpath([os.path.dirname(p) for p in paths])
