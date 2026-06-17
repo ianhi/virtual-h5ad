@@ -67,8 +67,31 @@ write once with `vds.vz.to_icechunk(store, group="X")`. Notes:
   into Icechunk). AnnData semantics live in `encoding-type` attrs, which we copy
   onto the Zarr group (done for `X` → `csr_matrix`).
 
+## Collections: many files → one repo (experiments 02/03)
+
+The multi-sample case (same `var`, disjoint `obs`) works as **one repo with a
+group per sample**, all arrays virtual. Tutorial:
+[`tutorial/TUTORIAL.md`](tutorial/TUTORIAL.md). On a 3-shard pbmc3k: 11 MB
+sources → 60 KB repo; stacking the samples reproduces the original `X` exactly.
+
+**You cannot concatenate the CSR arrays into one virtual array.** Each file
+chunks `data`/`indices` differently and ends on a partial chunk; a single Zarr
+array needs a regular chunk grid. VirtualiZarr is explicit:
+
+```
+ValueError: Cannot concatenate arrays with inconsistent chunk shapes:
+(5973,) vs (5939,). Requires ZEP003 (Variable-length Chunks).
+```
+
+So the collection stays group-per-sample and stacks at read time (the stack is
+tiny; the matrix bytes stay virtual).
+
+**Container prefix must match on read.** Icechunk gates virtual reads: the
+reader must `authorize_virtual_chunk_access` for the same source-directory prefix
+the repo was built against, or chunk fetches raise `IcechunkError`.
+
 ## Open questions / next
 
 - Carry string + categorical columns into the repo (load-and-write-native path).
 - Generalize the per-array merge into a recursive walk of the whole h5ad.
-- Multi-file: stack many h5ads along `obs` (the dataset-collection use case).
+- Remote (`s3://`) sources via `ic.s3_store` containers.
