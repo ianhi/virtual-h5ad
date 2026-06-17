@@ -18,5 +18,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
+    "jupyter-collaboration>=4.4.1",
     "jupyterlab>=4.5.9",
 ]

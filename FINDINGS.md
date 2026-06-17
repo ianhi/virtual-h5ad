@@ -109,6 +109,23 @@ bytes it needs. **Readers must enable** `zarr.config.set({'array.rectilinear_chu
 reader must `authorize_virtual_chunk_access` for the same source-directory prefix
 the repo was built against, or chunk fetches raise `IcechunkError`.
 
+## Real data: Allen Institute Human Immune Health Atlas (experiment 05)
+
+Validated on actual CELLxGENE files (collection
+`77f9d7e9-5675-49c3-abed-ce02f39eef1b`), not just sharded pbmc3k. Two cell-type
+files (dcs + other_cells) sharing the 32,357-gene panel:
+
+- **406 MB sources → ~410 KB repo (~995× smaller)**, one logical `X`
+  (34,224 × 32,357, 79M nonzeros), virtualized in ~0.1 s.
+- Every source file's rows reconstruct **byte-identically**.
+- These files use **int64** `indices`/`indptr` (pbmc3k used int32) and gzip
+  (`deflate` level 4) — the tool reads dtype/codecs/chunk sizes per array, so it
+  adapts with no changes. Files have different `data` chunk sizes (8270 vs
+  14213); the rectilinear grid stitches them anyway.
+
+Gotcha: `virtualize_matrix` orders samples by sorted path; verify against the
+same order (sorted glob put `dcs` before `other_cells`).
+
 ## Open questions / next
 
 - Carry string + categorical columns into the repo (load-and-write-native path).
