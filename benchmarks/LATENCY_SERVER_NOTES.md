@@ -1,36 +1,39 @@
-# Notes on http_latency_server.py (usability feedback)
+# http_latency_server.py — notes
 
-Copied from `../virtual/benchmarks/http_latency_server.py` and used to benchmark
-Icechunk virtual reads under injected latency. It worked well; the model
-(lognormal latency mode + shared-pipe bandwidth + GET/concurrency counters) is
-exactly what's needed for honest wall-clock interpretation. Things that would
-have made it easier to use:
+Our copy is an **aiohttp-based rewrite** of `../virtual/benchmarks/http_latency_server.py`.
+The original hand-rolled `BaseHTTPRequestHandler` reimplemented HTTP Range parsing,
+206/416/suffix-range handling, and loaded the whole file into RAM. This version
+keeps only the benchmark-specific instrumentation and lets a tested backend own the
+HTTP correctness. Changes worth porting back upstream:
 
-1. **Serves only from RAM.** `self.data = self.file_path.read_bytes()` loads the
-   whole file, so it can't serve the 10 GB atlas — I had to fall back to a 56 MB
-   file. Add an on-disk mode that `pread`s the requested range from the file.
-   *Then subtract the real disk-read time from the injected latency* so the
-   promised RTT stays honest (a range read of a cold 10 GB file isn't free).
+1. **aiohttp `web.FileResponse` owns Range/206/416/conditional + streaming.** No
+   custom range code. Correctness comes from a mature library, not us.
 
-2. **Ephemeral port is hardcoded** (`("127.0.0.1", 0)`). Expose a `port` arg on
-   `LatencyRangeServer.__init__` and the CLI. Needed to (a) pin a stable URL and
-   (b) work around consumers that mishandle non-default ports — e.g. Icechunk
-   drops the port from virtual-chunk location URLs (see
-   `experiments/icechunk_port_drop_repro.py`), so a virtual repo pointed at
-   `http://127.0.0.1:<ephemeral>/...` is unreadable; only port 80 would match.
+2. **Serves from disk, not RAM.** `self.size = path.stat().st_size`; `FileResponse`
+   streams the requested range off disk. The original `read_bytes()` couldn't serve
+   the 10 GB atlas. The injected latency is *added on top* of the (sub-ms, local-SSD)
+   range read, so the modelled RTT stays dominated by the knob — accurate enough that
+   we don't subtract disk time, but worth revisiting for spinning disks / huge ranges.
 
-3. **plain-HTTP gotcha.** Consumers must opt into `http://` explicitly
-   (obstore: `client_options={"allow_http": True}`; icechunk:
-   `http_store({"allow_http": "true"})`). Worth a one-line note in the docstring,
-   since the default failure (`reqwest BadScheme`) is opaque.
+3. **`port` argument** (default 0 = ephemeral). Lets callers pin a port — needed to
+   bind 80 to dodge the icechunk port-drop bug, or for a stable URL across runs.
 
-4. **In-process usage is the good path but under-documented.** The module
-   docstring leads with the CLI; the `LatencyRangeServer` class (with
-   `__enter__/__exit__`, `reset_counts()`, `set_latency_ms()`,
-   `set_bandwidth_mbs()`, and the `n_gets`/`max_in_flight`/`total_bytes`
-   counters) is what a benchmark actually wants. A short in-process example near
-   the top would help.
+4. **Async concurrency model.** One event loop; per-request `await asyncio.sleep`
+   for latency overlaps naturally, and an `AsyncSharedPipe` (asyncio.Lock + loop
+   clock) meters bandwidth. Cleaner than the thread-per-request + blocking sleeps of
+   the original, and the peak-concurrency counter still works (verified: 16
+   concurrent GETs → peak 16).
 
-5. **A `stats()` snapshot** returning `{n_gets, max_in_flight, total_bytes}` under
-   one lock would be tidier than reading the fields individually (they can move
-   between reads while requests are in flight).
+Kept from the original: the `LatencyModel` (lognormal, mode-parameterised) and the
+shared-pipe bandwidth concept; the counters (`n_gets`, `ranges`/`total_bytes`,
+`max_in_flight`); `set_latency_ms`/`set_bandwidth_mbs`/`reset_counts`; the
+`__enter__/__exit__` context-manager API.
+
+Remaining nits:
+- Range is parsed a second time for *accounting only* (counters + bandwidth bytes);
+  serving still uses aiohttp. A post-response byte count would avoid the small
+  duplication but aiohttp doesn't expose it cleanly before `prepare()`.
+- A single `stats()` snapshot (`{n_gets, max_in_flight, total_bytes}` under one lock)
+  would be tidier than reading the fields individually while requests are in flight.
+- Consumers must opt into plain HTTP (obstore `client_options={"allow_http": True}`,
+  icechunk `http_store({"allow_http": "true"})`); documented in the module docstring.
