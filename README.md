@@ -27,6 +27,8 @@ uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --r
   `virtualize_matrix` / `open_matrix`: the whole collection as one logical `X`.
 - **[tutorial/virtualize_collection.py](tutorial/virtualize_collection.py)** —
   the simpler group-per-sample layout (stack at read time).
+- **[BUILD.md](BUILD.md)** — what we leaned on existing libraries for vs. what we
+  had to build (the build-vs-buy picture).
 - **[FINDINGS.md](FINDINGS.md)** — running log of what virtualizes cleanly, what
   doesn't, and why.
 - **`experiments/`** — the probes that established the above (numbered).

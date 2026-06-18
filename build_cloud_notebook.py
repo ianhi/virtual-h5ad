@@ -20,9 +20,9 @@ You found an atlas you want on [CELLxGENE](https://cellxgene.cziscience.com/):
 the **ocular surface atlas** — 815,769 cells from human cornea, sclera, and
 limbus, published as a single 10 GB `.h5ad` file.
 
-But you only care about one thing: **corneal endothelial cells**, a few thousand
-of them. The usual workflow forces you to load all 10 GB into memory just to read
-less than 1% of it.
+But you only care about one thing: the **endothelial cells** in the cornea — a
+rare population, a few thousand out of 815,769. The usual workflow forces you to
+load all 10 GB into memory just to read less than 1% of it.
 
 This notebook does the opposite. We open a **31 MB stand-in** for that 10 GB file,
 explore all of its metadata instantly, and then read *only the cells we ask for*.
@@ -89,18 +89,20 @@ pd.crosstab(adata.obs["cell_type"], adata.obs["tissue"]).loc[
 ]""")
 
 md("""\
-## The question: corneal endothelial cells
+## The question: a rare cell population
 
-The corneal endothelium is a single layer of cells that keeps the cornea clear; it
-does not regenerate, which is why it matters clinically. In this atlas the endothelial
-cells are a small minority — and we can find them with metadata alone.""")
+Endothelial cells are a small minority of this ocular atlas — in the cornea samples
+they are well under 1% of cells (the authors label them `CC_VenEndo`, vascular
+endothelium). A rare population is exactly where loading the whole matrix hurts
+most, and where metadata-only filtering shines: we can find every one of them
+without reading any expression data.""")
 
 code("""\
 import numpy as np
 
 in_cornea = adata.obs["tissue"].eq("cornea").to_numpy()
 endo = np.flatnonzero(in_cornea & adata.obs["cell_type"].eq("endothelial cell").to_numpy())
-print(f"corneal endothelial cells: {endo.size:,} of {adata.n_obs:,} "
+print(f"endothelial cells in cornea: {endo.size:,} of {adata.n_obs:,} "
       f"({100 * endo.size / adata.n_obs:.2f}%)")
 print("...identified without reading a single expression value.")""")
 
