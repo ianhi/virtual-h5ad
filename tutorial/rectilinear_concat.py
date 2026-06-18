@@ -84,7 +84,7 @@ def _download(
         return dest  # reuse a cached copy
     base = url.rsplit("/", 1)[0] + "/"
     name = _name(url)
-    store = HTTPStore.from_url(base)
+    store = HTTPStore.from_url(base, client_options={"allow_http": True})
     size = obstore.head(store, name)["size"]
     starts = list(range(0, size, block))
     with open(dest, "wb") as f:
@@ -297,7 +297,9 @@ def virtualize_matrix(
             read_paths = parse_urls = published
             base = os.path.commonprefix(published).rsplit("/", 1)[0] + "/"
             registry = ObjectStoreRegistry(
-                {base: SplittingReadableStore(HTTPStore.from_url(base))}
+                {base: SplittingReadableStore(
+                    HTTPStore.from_url(base, client_options={"allow_http": True})
+                )}
             )
             reader_factory = BufferedStoreReader  # fewer, larger, buffered reads
         else:  # local files
@@ -313,7 +315,7 @@ def virtualize_matrix(
         if remote:
             prefix, container_store = (
                 os.path.commonprefix(published).rsplit("/", 1)[0] + "/",
-                ic.http_store(),
+                ic.http_store({"allow_http": "true"}),  # also permits plain-http (localhost)
             )
         else:
             root = os.path.commonpath([os.path.dirname(p) for p in read_paths])
