@@ -435,17 +435,21 @@ def open_matrix(repo_path: str):
 
 
 def select_cells(repo_path: str, obs_indices, workers: int = 32):
-    """Read an arbitrary set of cells (rows) as a CSR submatrix, lazily.
+    """Read a set of cells (rows) as a CSR submatrix — an optional remote accelerator.
+
+    For most use, prefer the idiomatic AnnData path: ``open_anndata(repo)[mask].to_memory()``
+    returns a proper AnnData subset and, on a local repo, is already fast (anndata's
+    backed reader coalesces contiguous rows). This function exists for *remote*
+    repos, where a scattered row gather is otherwise thousands of serial,
+    latency-bound range requests.
 
     Because the whole collection is one logical `X`, a selection that mixes cells
     from different source files is just a row gather: `obs_indices` can span file
-    boundaries freely. Only the byte ranges covering the requested rows are fetched
-    from the source files — the rest of the matrix is never read.
-
-    The fetch is concurrent: requested rows are coalesced into contiguous runs and
-    each run's bytes are pulled in parallel (`workers` threads). The reads are
-    latency-bound range requests, so a scattered selection of thousands of cells
-    streams in seconds rather than minutes. Rows are returned in the order given.
+    boundaries freely. Only the byte ranges covering the requested rows are fetched.
+    Requested rows are coalesced into contiguous runs and each run's bytes are
+    pulled in parallel (`workers` threads, which release the GIL during I/O), so a
+    scattered selection of thousands of cells streams in seconds rather than
+    minutes. Rows are returned in the order given.
     """
     from concurrent.futures import ThreadPoolExecutor
 

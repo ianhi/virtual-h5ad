@@ -72,11 +72,15 @@ assemble the array ourselves.
    The repo still references the remote URL. (Streaming-parse path kept as an
    option.)
 
-7. **Concurrent run-coalesced reader** — `select_cells` ([`:435`](tutorial/rectilinear_concat.py#L435)).
-   A row gather over CSR is scattered byte ranges. We sort requested rows into
-   contiguous runs (one range request each) and fetch them across a thread pool
-   (reads release the GIL in Rust), restoring the caller's order. Streaming 3,462
-   scattered cells from the 10 GB file: **~160 s serial → ~9 s**.
+7. **Concurrent run-coalesced reader** — `select_cells` ([`:435`](tutorial/rectilinear_concat.py#L435)),
+   an *optional remote accelerator*. The idiomatic read is just `adata[mask].to_memory()`:
+   anndata's own backed reader coalesces contiguous rows, so locally it's already
+   fast (~1 s for 3,462 cells) and is what the notebook uses. But a scattered row
+   gather over *latency-bound* HTTP is thousands of serial requests. `select_cells`
+   sorts rows into contiguous runs and fetches them across a thread pool (reads
+   release the GIL in Rust), restoring caller order: streaming 3,462 scattered
+   cells from the remote 10 GB file goes **~160 s → ~9 s**. (The right long-term
+   home for this is anndata's backed reader itself.)
 
 8. **Self-authorizing open** — `open_repo` ([`:392`](tutorial/rectilinear_concat.py#L392)).
    Icechunk gates virtual reads on the source-prefix the repo was built against. We

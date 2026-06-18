@@ -12,6 +12,7 @@ dependencies = [
     "matplotlib>=3.11.0",
     "numpy>=2.4.6",
     "obstore>=0.10.1",
+    "scanpy>=1.12.1",
     "scipy>=1.17.1",
     "virtualizarr[hdf,icechunk]>=2.6.2",
     "xarray>=2026.4.0",

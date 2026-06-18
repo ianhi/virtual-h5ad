@@ -13,6 +13,7 @@ def md(s):
 def code(s):
     c.append(nbf.v4.new_code_cell(s))
 
+
 md("""\
 # Querying a 10 GB cell atlas without loading it
 
@@ -24,9 +25,9 @@ But you only care about one thing: the **endothelial cells** in the cornea — a
 rare population, a few thousand out of 815,769. The usual workflow forces you to
 load all 10 GB into memory just to read less than 1% of it.
 
-This notebook does the opposite. We open a **31 MB stand-in** for that 10 GB file,
-explore all of its metadata instantly, and then read *only the cells we ask for*.
-The full matrix is never loaded.""")
+This notebook does the opposite. We open a **31 MB stand-in** for that 10 GB file
+and work with it as an ordinary `AnnData` — but slicing it reads only the cells we
+ask for. The full matrix is never loaded.""")
 
 md("""\
 ## The stand-in: a virtual repository
@@ -45,12 +46,10 @@ original. As a reader, you never run that command; you just open the repo.
 
 > The same command works against a remote `https://` URL, in which case reads
 > stream from the cloud. Here the repo points at a local copy of the file, so the
-> walkthrough runs fast and doesn't hit the public server on every execution. How
-> the references are built is hidden in `tutorial/rectilinear_concat.py` — you
-> don't need to know.""")
+> walkthrough runs fast and doesn't hit the public server on every execution.""")
 
 code("""\
-from tutorial.rectilinear_concat import open_anndata, select_cells
+from tutorial.rectilinear_concat import open_anndata
 
 import subprocess
 print(subprocess.run(["du", "-sh", "repo/ocular10"], capture_output=True, text=True).stdout.strip(),
@@ -59,9 +58,9 @@ print(subprocess.run(["du", "-sh", "repo/ocular10"], capture_output=True, text=T
 md("""\
 ## Open it — instantly
 
-Opening the repo returns an ordinary `AnnData`. Nothing is loaded: the expression
+`open_anndata` returns an ordinary `AnnData`. Nothing is loaded: the expression
 matrix `X` is *backed* (read on demand), and `obs`/`var` were stored in the repo
-when it was built.""")
+when it was built. From here on, you use it like any other `AnnData`.""")
 
 code("""\
 import time
@@ -94,78 +93,67 @@ md("""\
 Endothelial cells are a small minority of this ocular atlas — in the cornea samples
 they are well under 1% of cells (the authors label them `CC_VenEndo`, vascular
 endothelium). A rare population is exactly where loading the whole matrix hurts
-most, and where metadata-only filtering shines: we can find every one of them
-without reading any expression data.""")
+most, and where metadata-only filtering shines: we can pick them out with a boolean
+mask over `obs`, before reading any expression data.""")
 
 code("""\
-import numpy as np
-
-in_cornea = adata.obs["tissue"].eq("cornea").to_numpy()
-endo = np.flatnonzero(in_cornea & adata.obs["cell_type"].eq("endothelial cell").to_numpy())
-print(f"endothelial cells in cornea: {endo.size:,} of {adata.n_obs:,} "
-      f"({100 * endo.size / adata.n_obs:.2f}%)")
-print("...identified without reading a single expression value.")""")
+mask = (adata.obs["tissue"] == "cornea") & (adata.obs["cell_type"] == "endothelial cell")
+print(f"endothelial cells in cornea: {mask.sum():,} of {adata.n_obs:,} "
+      f"({100 * mask.mean():.2f}%)")
+print("...selected from metadata alone, without reading a single expression value.")""")
 
 md("""\
 ## Read just those cells
 
-Now we read the expression matrix — but only for those 3,462 cells. `select_cells`
-fetches just the byte ranges covering the rows we asked for, in parallel. The other
-99.6% of the matrix is never touched.""")
+Subset the `AnnData` the way you always would — `adata[mask]` — and call
+`.to_memory()` to pull the expression values. Because `X` is backed by the repo,
+this reads only the byte ranges for those rows; the other 99.6% of the matrix is
+never touched. No special API: it's the ordinary AnnData idiom.""")
 
 code("""\
 t = time.time()
-X_endo = select_cells("repo/ocular10", endo)
-print(f"read {X_endo.shape[0]:,} cells x {X_endo.shape[1]:,} genes in {time.time() - t:.1f}s")
-print(f"non-zero entries read: {X_endo.nnz:,}")
-print(f"data touched: ~{X_endo.nnz * 8 / 1e6:.0f} MB  (vs. 10,000 MB for the whole file)")""")
+endo = adata[mask].to_memory()
+print(f"read {endo.n_obs:,} cells x {endo.n_vars:,} genes in {time.time() - t:.1f}s")
+print(f"non-zero entries read: {endo.X.nnz:,}")
+print(f"data touched: ~{endo.X.nnz * 8 / 1e6:.0f} MB  (vs. 10,000 MB for the whole file)")""")
 
 md("""\
-## Do some science
+## Do some science — the usual scanpy way
 
 A quick check that we really pulled endothelial cells: compare them against a
-matched random sample of corneal **epithelial** cells, using canonical markers. We
-score each gene by the fraction of cells in which it is detected.
+matched random sample of corneal **epithelial** cells. We read both subsets, then
+hand them to ordinary [scanpy](https://scanpy.readthedocs.io/) — normalize, log,
+and a marker dot plot. Nothing here knows the data is virtual.
 
 - **PECAM1, CDH5, VWF** — endothelial markers
 - **KRT12, KRT3, KRT14** — corneal epithelial keratins""")
 
 code("""\
+import numpy as np
+import anndata as ad
+import scanpy as sc
+
 rng = np.random.default_rng(0)
-epi_all = np.flatnonzero(in_cornea & adata.obs["cell_type"].eq("epithelial cell").to_numpy())
-epi = rng.choice(epi_all, size=endo.size, replace=False)   # match the group sizes
-X_epi = select_cells("repo/ocular10", epi)
-
-markers = ["PECAM1", "CDH5", "VWF", "KRT12", "KRT3", "KRT14"]
-gene_idx = [int(np.flatnonzero(adata.var["feature_name"].to_numpy() == g)[0]) for g in markers]
-
-def pct_expressing(X):
-    sub = X[:, gene_idx]
-    return np.asarray((sub > 0).mean(axis=0)).ravel() * 100
-
-frac = pd.DataFrame(
-    {"endothelial": pct_expressing(X_endo), "epithelial": pct_expressing(X_epi)},
-    index=markers,
+epi_idx = np.flatnonzero(
+    ((adata.obs["tissue"] == "cornea") & (adata.obs["cell_type"] == "epithelial cell")).to_numpy()
 )
-frac.round(1)""")
+epi = adata[np.sort(rng.choice(epi_idx, size=endo.n_obs, replace=False))].to_memory()
+
+sub = ad.concat([endo, epi], merge="same")   # the ~6,900 cells we care about, in memory
+sub.obs["cell_type"] = sub.obs["cell_type"].cat.remove_unused_categories()
+sub.obs["cell_type"].value_counts()""")
 
 code("""\
-import matplotlib.pyplot as plt
+sc.pp.normalize_total(sub, target_sum=1e4)   # standard scanpy preprocessing
+sc.pp.log1p(sub)
 
-fig, ax = plt.subplots(figsize=(7, 4))
-frac.plot.bar(ax=ax, color=["#1b7837", "#762a83"], width=0.8)
-ax.set_ylabel("% of cells expressing")
-ax.set_title("Corneal endothelial vs. epithelial markers")
-ax.set_xlabel("")
-ax.tick_params(axis="x", rotation=0)
-ax.legend(title="cornea, cell type")
-fig.tight_layout()
-plt.show()""")
+markers = {"endothelial": ["PECAM1", "CDH5", "VWF"], "epithelial": ["KRT12", "KRT3", "KRT14"]}
+sc.pl.dotplot(sub, markers, groupby="cell_type", gene_symbols="feature_name")""")
 
 md("""\
 The endothelial markers light up in the endothelial cells and the keratins in the
-epithelial cells — exactly as they should. We confirmed a real biological signal
-having read only the ~6,900 cells we cared about.
+epithelial cells — exactly as they should. We confirmed a real signal having read
+only the ~6,900 cells we cared about.
 
 ## What just happened
 
@@ -173,15 +161,15 @@ having read only the ~6,900 cells we cared about.
 |---|---|
 | Opened the atlas | instant — nothing loaded |
 | Explored 815,769 cells of metadata | free — lives in the 31 MB repo |
-| Read expression for 3,462 target cells | seconds — only their byte ranges |
+| Read expression for the cells we selected | seconds — only their byte ranges |
 | Loaded the 10 GB matrix | **never** |
 
 The repository is a thin, self-contained index that points back at the original
-file. Metadata questions are answered locally and instantly; expression reads
-fetch only the bytes for the cells you select, in parallel. The same `select_cells`
-call works for any selection — one donor, two cell types across several tissues, a
+file. You use it as a normal `AnnData`: metadata questions are answered locally and
+instantly, and `adata[mask].to_memory()` reads only the cells you select. The same
+code works for any selection — one donor, two cell types across several tissues, a
 random sample — and only ever moves the data you actually use. Point the same repo
-at the file's `https://` URL and these reads stream straight from the cloud.""")
+at the file's `https://` URL and these reads come from the cloud.""")
 
 nb["cells"] = c
 nb["metadata"]["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
