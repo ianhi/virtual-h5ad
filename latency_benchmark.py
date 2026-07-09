@@ -58,9 +58,10 @@ def _threadpool_select(repo_path, obs_indices, workers):
 
     from scipy import sparse
 
-    from virtual_h5ad._concat import MATRIX_GROUP, _open_root
+    from virtual_h5ad._open import open_root
+    from virtual_h5ad._sources import MATRIX_GROUP
 
-    x = _open_root(repo_path)[MATRIX_GROUP]
+    x = open_root(repo_path)[MATRIX_GROUP]
     indptr = x["indptr"][:]  # small (one int per cell); the bulk stays remote
     data, indices = x["data"], x["indices"]
 

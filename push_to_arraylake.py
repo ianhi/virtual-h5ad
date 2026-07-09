@@ -59,7 +59,8 @@ def main() -> None:
     from arraylake import Client
 
     from virtual_h5ad import virtualize_matrix
-    from virtual_h5ad._concat import MATRIX_GROUP, _open_root
+    from virtual_h5ad._open import open_root
+    from virtual_h5ad._sources import MATRIX_GROUP
 
     # Arraylake hands back an icechunk.Repository. We do NOT pass
     # authorize_virtual_chunk_access (that maps prefixes to Arraylake S3 bucket
@@ -93,7 +94,7 @@ def main() -> None:
     # does not read the matrices or load the full obs frames.
     print("verifying (reopening each group from Arraylake)…", flush=True)
     for group, _url, _label in DATASETS:
-        root = _open_root(repo, group)
+        root = open_root(repo, group)
         shape = tuple(int(x) for x in root[MATRIX_GROUP].attrs["shape"])
         obsm = list(root["obsm"].array_keys()) if "obsm" in root else []
         print(f"  {group:30} {shape}  obsm={obsm}", flush=True)
