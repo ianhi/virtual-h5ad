@@ -35,7 +35,7 @@ md("""\
 A publisher ran one command over the atlas file:
 
 ```python
-from tutorial.rectilinear_concat import virtualize_matrix
+from virtual_h5ad import virtualize_matrix
 virtualize_matrix(".../30127f02-...-e5b77e4989bd.h5ad", "repo/ocular10")
 ```
 
@@ -49,7 +49,7 @@ original. As a reader, you never run that command; you just open the repo.
 > walkthrough runs fast and doesn't hit the public server on every execution.""")
 
 code("""\
-from tutorial.rectilinear_concat import open_anndata
+from virtual_h5ad import open_anndata
 
 import subprocess
 print(subprocess.run(["du", "-sh", "repo/ocular10"], capture_output=True, text=True).stdout.strip(),
