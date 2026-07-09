@@ -50,14 +50,14 @@ One wrinkle: HDF5 pads each array's *final* chunk to full size (e.g. 5939 stored
 5918 valid). That padding can't be allowed to leak across a file boundary, so
 each file's tail chunk is materialized as one small **native** chunk holding only
 its valid elements. Everything else stays virtual. This is the part VirtualiZarr
-doesn't do yet; it lives in
-[`tutorial/rectilinear_concat.py`](rectilinear_concat.py).
+doesn't do yet; it lives in the
+[`virtual_h5ad`](../src/virtual_h5ad/_concat.py) package.
 
 ## Step 1 — Reference the collection as one matrix
 
 ```python
 import glob
-from tutorial.rectilinear_concat import virtualize_matrix
+from virtual_h5ad import virtualize_matrix
 
 paths = sorted(glob.glob("data/collection/shard_*.h5ad"))
 virtualize_matrix(paths, repo_path="repo/single")
@@ -84,8 +84,8 @@ authorize the same source directory the repo was built against:
 import zarr
 zarr.config.set({"array.rectilinear_chunks": True})   # enable rectilinear grids
 
-from tutorial.rectilinear_concat import open_matrix
-X = open_matrix("repo/single", source_root="data/collection")
+from virtual_h5ad import open_matrix
+X = open_matrix("repo/single")
 print(X.shape, X.nnz)      # (2700, 32738) 2286884
 ```
 
