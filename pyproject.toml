@@ -20,6 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "arraylake>=1.1.1",
     "coiled>=1.135.1",
     "ipykernel>=7.3.0",
     "jupyter-collaboration>=4.4.1",
