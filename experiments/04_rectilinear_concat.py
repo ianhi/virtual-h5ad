@@ -18,7 +18,7 @@ import numpy as np
 import zarr
 from scipy import sparse
 
-from tutorial.rectilinear_concat import (
+from virtual_h5ad._concat import (
     _registry,
     manifest_arrays,
     write_concat_virtual_array,

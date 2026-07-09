@@ -19,7 +19,7 @@ import os
 
 import anndata as ad
 
-from tutorial.rectilinear_concat import open_matrix, virtualize_matrix
+from virtual_h5ad import open_matrix, virtualize_matrix
 
 ALLEN = os.path.abspath("data/allen")
 
