@@ -190,16 +190,45 @@ def open_anndata(
         max_gap=max_gap,
         partial_values_concurrency=partial_values_concurrency,
     )
+
+    def _lazy_or_read(node):
+        """Backed (lazy) sparse dataset for a CSR/CSC group; eager read otherwise."""
+        if node.attrs.get("encoding-type") in ("csr_matrix", "csc_matrix"):
+            return aio.sparse_dataset(node)  # keeps big matrices out of memory
+        return aio.read_elem(node)
+
+    def _mapping(name):
+        return (
+            {k: _lazy_or_read(root[name][k]) for k in root[name].keys()}
+            if name in root
+            else {}
+        )
+
     obsm = {}
     if "obsm" in root:
-        keys = obsm_keys if obsm_keys is not None else list(root["obsm"].array_keys())
-        obsm = {k: root["obsm"][k] for k in keys}
-    return ad.AnnData(
+        keys = obsm_keys if obsm_keys is not None else list(root["obsm"].keys())
+        obsm = {k: _lazy_or_read(root["obsm"][k]) for k in keys}
+
+    adata = ad.AnnData(
         X=aio.sparse_dataset(root[MATRIX_GROUP]),
         obs=_read_obs(root["obs"], obs_columns),
         var=aio.read_elem(root["var"]),
         obsm=obsm or None,
+        layers=_mapping("layers") or None,
+        varm=_mapping("varm") or None,
+        obsp=_mapping("obsp") or None,
+        varp=_mapping("varp") or None,
+        uns=aio.read_elem(root["uns"]) if "uns" in root else None,
     )
+    if "raw" in root:
+        rawg = root["raw"]
+        adata.raw = ad.AnnData(
+            X=aio.sparse_dataset(rawg["X"]),
+            var=aio.read_elem(rawg["var"]),
+            varm=_mapping("raw/varm") if "varm" in rawg else None,
+            obs=adata.obs,  # raw shares the cell axis; Raw keeps only X/var/varm
+        )
+    return adata
 
 
 def _read_obs(obs_group, columns: list[str] | None = None):

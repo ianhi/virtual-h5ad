@@ -28,6 +28,7 @@ from ._sources import (
     download_file,
     is_remote,
     group_path,
+    open_h5,
     read_h5_elem,
     local_registry,
     resolve_paths,
@@ -198,27 +199,55 @@ def virtualize_matrix(
         if group is not None and group in root0:
             del root0[group]
 
-        # sparse X: data / indices as rectilinear virtual arrays
-        for name in ("data", "indices"):
+        import anndata.io as aio
+        import h5py
+
+        # Helpers bound to this build. The contract is "drop nothing": every source
+        # element is either virtualized (big per-cell matrices — byte-range refs) or
+        # copied native (everything else). A completeness check at the end fails if
+        # any top-level element was neither.
+        def _virt_array(src_key: str, dest_key: str) -> None:
+            """Virtualize one dense/1-D array, concatenated along axis 0 (cells)."""
+            grp, name = src_key.rsplit("/", 1)
             marrs = [
-                manifest_array(u, MATRIX_GROUP, name, registry, reader_factory)
-                for u in parse_urls
+                manifest_array(u, grp, name, registry, reader_factory) for u in parse_urls
             ]
             write_concat_virtual_array(
-                store,
-                group_path(group, MATRIX_GROUP, name),
-                f"{MATRIX_GROUP}/{name}",
-                marrs,
-                read_paths,
-                published,
+                store, group_path(group, *dest_key.split("/")), src_key,
+                marrs, read_paths, published,
             )
 
-        # dense obsm embeddings (X_pca, X_umap, ...): virtualize as rectilinear byte
-        # refs when the per-file grids line up (always for a single file; that is
-        # where it matters — a big embedding shouldn't be copied into the repo).
-        # When multiple files chunk the trailing axis differently (HDF5 picks the
-        # chunk shape from each file's size), fall back to inlining — obsm is tiny
-        # next to X, so a native copy is cheap.
+        def _virt_sparse(src_key: str, dest_key: str) -> None:
+            """Virtualize a CSR matrix: data/indices virtual, indptr native + attrs."""
+            for comp in ("data", "indices"):
+                _virt_array(f"{src_key}/{comp}", f"{dest_key}/{comp}")
+            indptr, n_var = combined_indptr(read_paths, matrix_key=src_key)
+            gg = zarr.open_group(store, mode="r+")
+            gg.create_array(
+                name=group_path(group, *f"{dest_key}/indptr".split("/")),
+                shape=indptr.shape, dtype=indptr.dtype, chunks=indptr.shape,
+            )[:] = indptr
+            gg[group_path(group, *dest_key.split("/"))].attrs.update(
+                {"encoding-type": "csr_matrix", "encoding-version": "0.1.0",
+                 "shape": [int(indptr.size - 1), n_var]}
+            )
+
+        def _native(src_key: str, parent_rel: str, name: str) -> None:
+            """Copy a source element wholesale as native (from the first file)."""
+            base0 = zarr.open_group(store, mode="r+")
+            base = base0[group] if group else base0
+            parent = base.require_group(parent_rel) if parent_rel else base
+            aio.write_elem(parent, name, read_h5_elem(read_paths[0], src_key))
+
+        handled: set[str] = set()  # top-level source keys we accounted for
+
+        # X (always present, CSR)
+        _virt_sparse(MATRIX_GROUP, MATRIX_GROUP)
+        handled.add(MATRIX_GROUP)
+
+        # dense obsm embeddings: virtualize as byte refs when the per-file grids line
+        # up (always for a single file — a big embedding shouldn't be copied); inline
+        # when files chunk the trailing axis differently (obsm is tiny next to X).
         obsm_names = shared_obsm(read_paths)
         for name in obsm_names:
             marrs = [
@@ -226,41 +255,90 @@ def virtualize_matrix(
                 for u in parse_urls
             ]
             if trailing_consistent(marrs):
-                write_concat_virtual_array(
-                    store,
-                    group_path(group, "obsm", name),
-                    f"obsm/{name}",
-                    marrs,
-                    read_paths,
-                    published,
-                )
+                _virt_array(f"obsm/{name}", f"obsm/{name}")
             else:
                 inline_obsm(store, group, name, read_paths)
 
-        indptr, n_var = combined_indptr(read_paths)
         g = zarr.open_group(store, mode="r+")
-        g.create_array(
-            name=group_path(group, MATRIX_GROUP, "indptr"),
-            shape=indptr.shape,
-            dtype=indptr.dtype,
-            chunks=indptr.shape,
-        )[:] = indptr
-        xg = g[group_path(group, MATRIX_GROUP)]
-        xg.attrs.update(
-            {
-                "encoding-type": "csr_matrix",
-                "encoding-version": "0.1.0",
-                "shape": [int(indptr.size - 1), n_var],
-            }
-        )
-        _write_obs_var(g, group, read_paths)  # small metadata, native (self-contained)
+        _write_obs_var(g, group, read_paths)  # native obs (concat) + var (shared)
+        handled.update({"obs", "var", "obsm"})
+
+        # Everything else — faithful, from the first file. `raw/X` and any `layers`
+        # are big per-cell matrices (virtualize); `varm`/`obsp`/`varp`/`uns` are small
+        # or global (copy native). Multi-file concat is defined for per-cell arrays
+        # only; pairwise matrices across files would be ill-defined, so refuse loudly.
+        multi = len(read_paths) > 1
+        with open_h5(read_paths[0]) as f0:
+            top = list(f0.keys())
+
+            def _dict_attrs(container: str) -> None:
+                dst = (g[group] if group else g)
+                if container in dst:
+                    dst[container].attrs.setdefault("encoding-type", "dict")
+                    dst[container].attrs.setdefault("encoding-version", "0.1.0")
+
+            if "obsm" in top and obsm_names:
+                _dict_attrs("obsm")
+
+            if "raw" in top:
+                _virt_sparse("raw/X", "raw/X")
+                _native("raw/var", "raw", "var")
+                if "varm" in f0["raw"]:
+                    _native("raw/varm", "raw", "varm")
+                rawg = (g[group] if group else g)["raw"]
+                rawg.attrs.update({"encoding-type": "raw", "encoding-version": "0.1.0"})
+                handled.add("raw")
+
+            if "layers" in top:
+                lg = f0["layers"]
+                for name in lg:
+                    if isinstance(lg[name], h5py.Group) and lg[name].attrs.get(
+                        "encoding-type"
+                    ) in ("csr_matrix", "csc_matrix"):
+                        _virt_sparse(f"layers/{name}", f"layers/{name}")
+                    else:
+                        _native(f"layers/{name}", "layers", name)
+                _dict_attrs("layers")
+                handled.add("layers")
+
+            if "varm" in top:
+                for name in f0["varm"]:
+                    _native(f"varm/{name}", "varm", name)
+                _dict_attrs("varm")
+                handled.add("varm")
+
+            for container in ("obsp", "varp"):
+                if container in top:
+                    if multi and len(list(f0[container])):
+                        raise NotImplementedError(
+                            f"{container} across multiple files isn't supported "
+                            "(pairwise matrices don't concatenate along cells)."
+                        )
+                    for name in f0[container]:
+                        _native(f"{container}/{name}", container, name)
+                    _dict_attrs(container)
+                    handled.add(container)
+
+            if "uns" in top:
+                _native("uns", "", "uns")  # global metadata, taken from the first file
+                handled.add("uns")
+
+            # Completeness guard: never silently drop a source element again.
+            dropped = [k for k in top if k not in handled]
+            if dropped:
+                raise NotImplementedError(
+                    f"virtualize_matrix would drop source elements {dropped}; "
+                    "add handling for them (the goal is a lossless mirror)."
+                )
+
         dsg = g[group] if group else g
-        if obsm_names:
-            dsg["obsm"].attrs["encoding-type"] = "dict"
         dsg.attrs["source_files"] = published
         dsg.attrs["obsm_keys"] = obsm_names
+        extras = [k for k in ("raw", "layers", "varm", "obsp", "varp", "uns") if k in handled]
         return session.commit(
-            f"virtual X{' + obsm' if obsm_names else ''} over {len(published)} files"
+            f"virtual X{' + obsm' if obsm_names else ''}"
+            + (f" + {'/'.join(extras)}" if extras else "")
+            + f" over {len(published)} files"
             + (f" [{group}]" if group else "")
         )
     finally:

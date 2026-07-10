@@ -262,14 +262,18 @@ def inline_obsm(store, group: str | None, name: str, paths: list[str]) -> None:
     aio.write_elem(dest["obsm"], name, np.concatenate(arrs, axis=0))
 
 
-def combined_indptr(paths: list[str]):
-    """Vertically-stacked CSR indptr: each file's row pointers shifted by prior nnz."""
+def combined_indptr(paths: list[str], matrix_key: str = MATRIX_GROUP):
+    """Vertically-stacked CSR indptr: each file's row pointers shifted by prior nnz.
+
+    `matrix_key` is the CSR matrix's path inside each source file (``"X"``,
+    ``"raw/X"``, ``"layers/counts"``) — so the same stacking works for any matrix.
+    """
     out = [np.array([0], dtype="int64")]
     nnz, n_var = 0, 0
     for p in paths:
         with open_h5(p) as f:
-            ip = f[f"{MATRIX_GROUP}/indptr"][:]
-            n_var = int(f[MATRIX_GROUP].attrs["shape"][1])
+            ip = f[f"{matrix_key}/indptr"][:]
+            n_var = int(f[matrix_key].attrs["shape"][1])
         out.append(ip[1:].astype("int64") + nnz)
         nnz += int(ip[-1])
     return np.concatenate(out), n_var
