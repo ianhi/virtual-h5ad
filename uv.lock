@@ -3888,19 +3888,6 @@ wheels = [
 ]
 
 [[package]]
-name = "snailmail"
-version = "0.4.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/12/e0/70e684c5f74dddda98879c07cea9282221c31d4de1db60cbe150b9ed513d/snailmail-0.4.1.tar.gz", hash = "sha256:1e1659925e89c89e80d571ad6e7eb33fae6445f3b3c347234becc37332b6b24a", size = 48287, upload-time = "2026-06-24T17:53:53.459Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/9f/80579135c8cae21eac10f735cf7541a1a8b56e482361807960fea2a49384/snailmail-0.4.1-py3-none-any.whl", hash = "sha256:4f89fd154866be38c66e26b373c251f8e6604728137d2f85a9acf0d8b15a1324", size = 37884, upload-time = "2026-06-24T17:53:52.248Z" },
-]
-
-[[package]]
 name = "sortedcontainers"
 version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4271,9 +4258,6 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-bench = [
-    { name = "snailmail" },
-]
 dev = [
     { name = "arraylake" },
     { name = "coiled" },
@@ -4304,7 +4288,6 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-bench = [{ name = "snailmail", specifier = ">=0.4.0" }]
 dev = [
     { name = "arraylake", specifier = ">=1.1.1" },
     { name = "coiled", specifier = ">=1.135.1" },

@@ -2,56 +2,58 @@
 
 Virtually ingest AnnData `.h5ad` files into [Icechunk](https://icechunk.io) using
 [VirtualiZarr](https://virtualizarr.readthedocs.io) — referencing the HDF5 byte
-ranges as Zarr instead of copying the data.
+ranges as Zarr instead of copying the data. A whole collection becomes **one
+logical sparse matrix** you can open as an ordinary `AnnData` and slice, streaming
+only the cells you select.
 
-**Note - Tech Demo**
+**Note — tech demo.** Virtualizing these is absolutely possible, but getting good
+performance surfaced improvement opportunities up and down the stack, so this
+currently leans on a few branches I plan to upstream:
 
-This is very much in tech demo status. Virtualizing these is absolutely possible, but in getting there I found several performance improvement opportunities up and down the stack. So this uses some branchs of virtualizarr, zarr, and icechunk. ALl of which I plan to upstream so this work well by default.
+1. Local optimizations in virtualizarr/zarr to virtualize the sparse layout cleanly.
+2. A Zarr codec pipeline for coalescing reads — <https://github.com/ianhi/coalescing-zarr>.
+3. An icechunk branch that coalesces range reads in the Rust layer —
+   <https://github.com/earth-mover/icechunk/tree/ian/more-specific-vritual>.
 
-It requires:
-
-1. Some local optimizations to actually virtualize
-2. A Zarr codec pipeline for coalescing reads: <https://github.com/ianhi/coalescing-zarr/tree/main>
-3. An icechunk branch that does intelligent read coalescing in the rust layer (<https://github.com/earth-mover/icechunk/tree/ian/more-specific-vritual>)
-
-That said, initial results are extremely promising I can make fairly high performance selections of subsets without downloading the entire files!
+A fresh `uv sync` installs all three automatically (the right per-platform fork
+wheel is pinned in `[tool.uv.sources]`; no Rust build). Initial results are
+promising: fairly high-performance selections of subsets without downloading the
+whole files.
 
 ## Quick start
 
 ```bash
 uv sync
-bash experiments/00_get_data.sh                  # fetch a real pbmc3k h5ad
-uv run python experiments/02_make_collection.py  # shard it into a collection
-uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --repo repo/collection
 ```
 
-## Layout
+Then run the two notebooks (launch Jupyter from this directory so the kernel uses
+the project `.venv`):
 
-- **[atlas_demo.ipynb](atlas_demo.ipynb)** — the capstone demo: reference **two**
-  published CELLxGENE studies (Allen immune atlas + a 10 GB ocular atlas) into
-  **one** repo as separate groups, open each as ordinary `AnnData`, then compute
-  QC metrics over the virtual matrix and write them **back into the repo as native
-  chunks**. Start here.
-- **[virtualize_h5ad_collection.ipynb](virtualize_h5ad_collection.ipynb)** — the
-  minimal walkthrough on synthetic shards.
-- **[virtualize_allen_collection.ipynb](virtualize_allen_collection.ipynb)** — the
-  builder workflow on the Allen study alone.
-- **[query_cloud_atlas.ipynb](query_cloud_atlas.ipynb)** — the reader's payoff:
-  query a 10 GB CELLxGENE atlas through a small repo, reading only the cells you
-  select (free metadata, targeted streaming).
-- **[tutorial/TUTORIAL.md](tutorial/TUTORIAL.md)** — the same walkthrough as prose.
-- **[src/virtual_h5ad/](src/virtual_h5ad/)** — the package. The public API is
-  `virtualize_matrix` (build the repo, one dataset per `group`), `open_anndata`
-  (open a group as a normal, lazily-backed `AnnData`), and `add_qc_metrics`
-  (compute over the virtual X, store native); the engine lives in
-  [`_concat.py`](src/virtual_h5ad/_concat.py).
-- **[tutorial/virtualize_collection.py](tutorial/virtualize_collection.py)** —
-  the simpler group-per-sample layout (stack at read time).
-- **[BUILD.md](BUILD.md)** — what we leaned on existing libraries for vs. what we
-  had to build (the build-vs-buy picture).
-- **[FINDINGS.md](FINDINGS.md)** — running log of what virtualizes cleanly, what
-  doesn't, and why.
-- **`experiments/`** — the probes that established the above (numbered).
+- **[build_virtual_omics.ipynb](build_virtual_omics.ipynb)** — build the repo:
+  reference three published CELLxGENE studies as virtual byte ranges (copying no
+  expression data) into an Icechunk repo.
+- **[virtual_omics_demo.ipynb](virtual_omics_demo.ipynb)** — the payoff:
+  reproduce Fig. 3 of Gong/Gustafson et al. (*Nature* 2025) against
+  `earthmover-public/virtual-omics` — an obs-only composition analysis over all
+  108 donors with zero expression streamed, a targeted expression pull to validate
+  it, and a read-coalescing benchmark.
+
+## Public API — `src/virtual_h5ad/`
+
+```python
+from virtual_h5ad import virtualize_matrix, open_anndata, add_qc_metrics
+
+virtualize_matrix(["a.h5ad", "b.h5ad"], "repo/atlas")  # build (references only)
+adata = open_anndata("repo/atlas")                      # lazy, backed by the repo
+sub   = adata[mask].to_memory()                         # streams only those cells
+add_qc_metrics("repo/atlas")                            # compute over virtual X, store native
+```
+
+The engine is split across small modules: `_sources` (inputs/IO), `_manifest`
+(the rectilinear virtual-concat engine), `_write` (build + QC), `_open` (read).
+Reads **coalesce by default** — a contiguous selection (e.g. one donor) collapses
+from thousands of latency-bound chunk fetches into a handful of large range GETs.
+See [`notes/coiled-setup.md`](notes/coiled-setup.md) to run the demo on Coiled.
 
 ## Status
 
@@ -71,5 +73,5 @@ Working:
 Local files and remote `http(s)://` sources both work — and because CELLxGENE
 serves its files over HTTPS, a repo built against those URLs is portable to a
 cloud store as-is (only the *repo's* storage backend changes; the source
-references don't). Not yet done: pointing repo storage at a cloud store like
-Arraylake — see FINDINGS.md.
+references don't), which is how `earthmover-public/virtual-omics` is hosted on
+Arraylake.

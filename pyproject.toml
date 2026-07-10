@@ -27,9 +27,6 @@ dev = [
     "jupyter-collaboration>=4.4.1",
     "jupyterlab>=4.5.9",
 ]
-# latency_benchmark.py drives the shared snailmail HTTPRangeServer (injectable
-# latency + bandwidth). Not a hand-rolled server.
-bench = ["snailmail>=0.4.0"]
 
 [build-system]
 requires = ["hatchling"]
