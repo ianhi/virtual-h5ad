@@ -8,7 +8,13 @@ ranges as Zarr instead of copying the data.
 
 This is very much in tech demo status. Virtualizing these is absolutely possible, but in getting there I found several performance improvement opportunities up and down the stack. So this uses some branchs of virtualizarr, zarr, and icechunk. ALl of which I plan to upstream so this work well by default.
 
-That said, intial results are extremely promising I can make fairly high performance selections of subsets without downloading the entire files!
+It requires:
+
+1. Some local optimizations to actually virtualize
+2. A Zarr codec pipeline for coalescing reads: <https://github.com/ianhi/coalescing-zarr/tree/main>
+3. An icechunk branch that does intelligent read coalescing in the rust layer (<https://github.com/earth-mover/icechunk/tree/ian/more-specific-vritual>)
+
+That said, initial results are extremely promising I can make fairly high performance selections of subsets without downloading the entire files!
 
 ## Quick start
 
