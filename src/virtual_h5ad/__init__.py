@@ -34,10 +34,15 @@ warnings.filterwarnings("ignore", message=".*autosharding.*", category=UserWarni
 zarr.config.set({"array.rectilinear_chunks": True})
 
 from ._open import open_anndata, open_matrix, open_repo  # noqa: E402
-from ._write import add_qc_metrics, virtualize_matrix  # noqa: E402
+from ._write import (  # noqa: E402
+    add_missing_elements,
+    add_qc_metrics,
+    virtualize_matrix,
+)
 
 __all__ = [
     "virtualize_matrix",
+    "add_missing_elements",
     "open_anndata",
     "open_matrix",
     "open_repo",

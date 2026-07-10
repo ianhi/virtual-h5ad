@@ -8,7 +8,9 @@ as one rectilinear virtual matrix and writes obs/var/indptr natively.
 from __future__ import annotations
 
 import os.path  # commonpath/commonprefix: prefix-math, no pathlib equivalent
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import zarr
 from obspec_utils.registry import ObjectStoreRegistry
@@ -88,54 +90,29 @@ def _make_repo(repo_path, prefix: str, container_store, overwrite: bool, repo=No
     )
 
 
-def virtualize_matrix(
-    source,
-    repo_path: str | None = None,
-    group: str | None = None,
-    overwrite: bool = True,
-    download: bool = True,
-    cache_dir: str | None = None,
-    repo=None,
-) -> str:
-    """Reference a collection's X (and obsm) as ONE virtual matrix in an Icechunk repo.
+@contextmanager
+def _indexed_sources(source, download: bool, cache_dir, injected_repo: bool):
+    """Resolve `source` to indexable paths + a parsing registry + a container spec.
 
-    `source` may be a list of files/URLs, a glob (``"dir/*.h5ad"``), or a directory.
-    `X` (`data`/`indices`) and any shared dense `obsm` become single rectilinear
-    virtual arrays spanning all files; `indptr` and obs/var are written into the
-    repo. Pass `group` to place this dataset under a named subgroup so several
-    datasets can share one repo (open with ``open_anndata(repo, group=...)``); use
-    `overwrite=False` to append a group to an existing repo. Returns the snapshot id.
-
-    Write target: pass `repo_path` for a local Icechunk repo, or `repo` for an
-    already-open ``icechunk.Repository`` (e.g. one from Arraylake / an S3 store) —
-    then reference the **remote** source URLs so the repo is portable. For an injected
-    repo the source's virtual-chunk container is installed **transiently** (never
-    persisted into the repo config), so nothing you couldn't persist (e.g. an
-    Arraylake-forbidden `http(s)` prefix) lands on disk; readers re-supply it at open.
-
-    For remote (`http(s)://`) sources there are two indexing strategies:
-      - `download=True` (default): fetch each file once (parallel range GETs),
-        index the local copy. Far faster and kinder to the server than walking the
-        HDF5 chunk index over thousands of HTTP range requests.
-      - `download=False`: parse directly over HTTP without downloading — slower,
-        but needs no local scratch space.
-    `cache_dir` keeps the downloaded copies there (reused on re-run, not deleted).
-    Either way the repo references the remote URLs, so downstream reads stream only
-    the cells touched. `overwrite` (default True) makes the call safe to re-run.
+    Yields a namespace with everything the manifest builders need: `read_paths` (what
+    we index locally), `parse_urls` (``file://``-prefixed for the parser), `published`
+    (the URLs/paths the repo will *reference*), `registry`, `reader_factory`, and the
+    virtual-chunk-container `prefix`/`container_store`. Downloaded copies live in
+    `cache_dir` (kept) or a temp dir (removed on exit). `injected_repo` requires a
+    remote source so the repo stays portable. Shared by the full build and the
+    additive top-up so both index sources exactly the same way.
     """
     import shutil
     import tempfile
 
     import icechunk as ic
 
-    if (repo_path is None) == (repo is None):
-        raise ValueError("pass exactly one of repo_path (local) or repo (open repo)")
     published = resolve_paths(source)  # the URLs/paths the repo will reference
     remote = is_remote(published[0])
-    if repo is not None and not remote:
+    if injected_repo and not remote:
         raise ValueError("an injected repo needs remote source URLs to stay portable")
 
-    # downloads go to cache_dir (kept) or a temp dir (deleted in finally)
+    # downloads go to cache_dir (kept) or a temp dir (deleted on exit)
     scratch = None
     if remote and download:
         dl_dir = cache_dir or (scratch := tempfile.mkdtemp(prefix="vh5ad_"))
@@ -187,7 +164,112 @@ def virtualize_matrix(
                 ic.local_filesystem_store(f"{root}/"),
             )
 
-        repo = _make_repo(repo_path, prefix, container_store, overwrite, repo=repo)
+        yield SimpleNamespace(
+            read_paths=read_paths,
+            parse_urls=parse_urls,
+            published=published,
+            registry=registry,
+            reader_factory=reader_factory,
+            prefix=prefix,
+            container_store=container_store,
+        )
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _matrix_helpers(store, group: str | None, src):
+    """The three build primitives, bound to one repo `store` + source set `src`.
+
+    The contract is "drop nothing": every source element is either virtualized (big
+    per-cell matrices — byte-range refs) or copied native (everything else).
+
+    - `_virt_array` — virtualize one dense/1-D array, concatenated along axis 0 (cells).
+    - `_virt_sparse` — virtualize a CSR matrix: data/indices virtual, indptr native + attrs.
+    - `_native` — copy a source element wholesale as native (from the first file).
+
+    Shared by the full build (`virtualize_matrix`) and the additive top-up
+    (`add_missing_elements`) so both reference/copy elements identically.
+    """
+    import anndata.io as aio
+
+    def _virt_array(src_key: str, dest_key: str) -> None:
+        grp, name = src_key.rsplit("/", 1)
+        marrs = [
+            manifest_array(u, grp, name, src.registry, src.reader_factory)
+            for u in src.parse_urls
+        ]
+        write_concat_virtual_array(
+            store, group_path(group, *dest_key.split("/")), src_key,
+            marrs, src.read_paths, src.published,
+        )
+
+    def _virt_sparse(src_key: str, dest_key: str) -> None:
+        for comp in ("data", "indices"):
+            _virt_array(f"{src_key}/{comp}", f"{dest_key}/{comp}")
+        indptr, n_var = combined_indptr(src.read_paths, matrix_key=src_key)
+        gg = zarr.open_group(store, mode="r+")
+        gg.create_array(
+            name=group_path(group, *f"{dest_key}/indptr".split("/")),
+            shape=indptr.shape, dtype=indptr.dtype, chunks=indptr.shape,
+        )[:] = indptr
+        gg[group_path(group, *dest_key.split("/"))].attrs.update(
+            {"encoding-type": "csr_matrix", "encoding-version": "0.1.0",
+             "shape": [int(indptr.size - 1), n_var]}
+        )
+
+    def _native(src_key: str, parent_rel: str, name: str) -> None:
+        base0 = zarr.open_group(store, mode="r+")
+        base = base0[group] if group else base0
+        parent = base.require_group(parent_rel) if parent_rel else base
+        aio.write_elem(parent, name, read_h5_elem(src.read_paths[0], src_key))
+
+    return _virt_array, _virt_sparse, _native
+
+
+def virtualize_matrix(
+    source,
+    repo_path: str | None = None,
+    group: str | None = None,
+    overwrite: bool = True,
+    download: bool = True,
+    cache_dir: str | None = None,
+    repo=None,
+) -> str:
+    """Reference a collection's X (and obsm) as ONE virtual matrix in an Icechunk repo.
+
+    `source` may be a list of files/URLs, a glob (``"dir/*.h5ad"``), or a directory.
+    `X` (`data`/`indices`) and any shared dense `obsm` become single rectilinear
+    virtual arrays spanning all files; `indptr` and obs/var are written into the
+    repo. Pass `group` to place this dataset under a named subgroup so several
+    datasets can share one repo (open with ``open_anndata(repo, group=...)``); use
+    `overwrite=False` to append a group to an existing repo. Returns the snapshot id.
+
+    Write target: pass `repo_path` for a local Icechunk repo, or `repo` for an
+    already-open ``icechunk.Repository`` (e.g. one from Arraylake / an S3 store) —
+    then reference the **remote** source URLs so the repo is portable. For an injected
+    repo the source's virtual-chunk container is installed **transiently** (never
+    persisted into the repo config), so nothing you couldn't persist (e.g. an
+    Arraylake-forbidden `http(s)` prefix) lands on disk; readers re-supply it at open.
+
+    For remote (`http(s)://`) sources there are two indexing strategies:
+      - `download=True` (default): fetch each file once (parallel range GETs),
+        index the local copy. Far faster and kinder to the server than walking the
+        HDF5 chunk index over thousands of HTTP range requests.
+      - `download=False`: parse directly over HTTP without downloading — slower,
+        but needs no local scratch space.
+    `cache_dir` keeps the downloaded copies there (reused on re-run, not deleted).
+    Either way the repo references the remote URLs, so downstream reads stream only
+    the cells touched. `overwrite` (default True) makes the call safe to re-run.
+    """
+    if (repo_path is None) == (repo is None):
+        raise ValueError("pass exactly one of repo_path (local) or repo (open repo)")
+
+    with _indexed_sources(source, download, cache_dir, repo is not None) as src:
+        read_paths, parse_urls = src.read_paths, src.parse_urls
+        repo = _make_repo(
+            repo_path, src.prefix, src.container_store, overwrite, repo=repo
+        )
         session = repo.writable_session("main")
         store = session.store
 
@@ -199,45 +281,13 @@ def virtualize_matrix(
         if group is not None and group in root0:
             del root0[group]
 
-        import anndata.io as aio
         import h5py
 
-        # Helpers bound to this build. The contract is "drop nothing": every source
-        # element is either virtualized (big per-cell matrices — byte-range refs) or
-        # copied native (everything else). A completeness check at the end fails if
-        # any top-level element was neither.
-        def _virt_array(src_key: str, dest_key: str) -> None:
-            """Virtualize one dense/1-D array, concatenated along axis 0 (cells)."""
-            grp, name = src_key.rsplit("/", 1)
-            marrs = [
-                manifest_array(u, grp, name, registry, reader_factory) for u in parse_urls
-            ]
-            write_concat_virtual_array(
-                store, group_path(group, *dest_key.split("/")), src_key,
-                marrs, read_paths, published,
-            )
-
-        def _virt_sparse(src_key: str, dest_key: str) -> None:
-            """Virtualize a CSR matrix: data/indices virtual, indptr native + attrs."""
-            for comp in ("data", "indices"):
-                _virt_array(f"{src_key}/{comp}", f"{dest_key}/{comp}")
-            indptr, n_var = combined_indptr(read_paths, matrix_key=src_key)
-            gg = zarr.open_group(store, mode="r+")
-            gg.create_array(
-                name=group_path(group, *f"{dest_key}/indptr".split("/")),
-                shape=indptr.shape, dtype=indptr.dtype, chunks=indptr.shape,
-            )[:] = indptr
-            gg[group_path(group, *dest_key.split("/"))].attrs.update(
-                {"encoding-type": "csr_matrix", "encoding-version": "0.1.0",
-                 "shape": [int(indptr.size - 1), n_var]}
-            )
-
-        def _native(src_key: str, parent_rel: str, name: str) -> None:
-            """Copy a source element wholesale as native (from the first file)."""
-            base0 = zarr.open_group(store, mode="r+")
-            base = base0[group] if group else base0
-            parent = base.require_group(parent_rel) if parent_rel else base
-            aio.write_elem(parent, name, read_h5_elem(read_paths[0], src_key))
+        # The three build primitives (shared with the additive top-up). The contract
+        # is "drop nothing": every source element is either virtualized (big per-cell
+        # matrices — byte-range refs) or copied native (everything else). A
+        # completeness check at the end fails if any top-level element was neither.
+        _virt_array, _virt_sparse, _native = _matrix_helpers(store, group, src)
 
         handled: set[str] = set()  # top-level source keys we accounted for
 
@@ -251,7 +301,7 @@ def virtualize_matrix(
         obsm_names = shared_obsm(read_paths)
         for name in obsm_names:
             marrs = [
-                manifest_array(u, "obsm", name, registry, reader_factory)
+                manifest_array(u, "obsm", name, src.registry, src.reader_factory)
                 for u in parse_urls
             ]
             if trailing_consistent(marrs):
@@ -332,18 +382,78 @@ def virtualize_matrix(
                 )
 
         dsg = g[group] if group else g
-        dsg.attrs["source_files"] = published
+        dsg.attrs["source_files"] = src.published
         dsg.attrs["obsm_keys"] = obsm_names
         extras = [k for k in ("raw", "layers", "varm", "obsp", "varp", "uns") if k in handled]
         return session.commit(
             f"virtual X{' + obsm' if obsm_names else ''}"
             + (f" + {'/'.join(extras)}" if extras else "")
-            + f" over {len(published)} files"
+            + f" over {len(src.published)} files"
             + (f" [{group}]" if group else "")
         )
-    finally:
-        if scratch:
-            shutil.rmtree(scratch, ignore_errors=True)
+
+
+def add_missing_elements(
+    source,
+    group: str | None = None,
+    repo_path: str | None = None,
+    repo=None,
+    elements: tuple[str, ...] = ("raw", "uns"),
+    download: bool = True,
+    cache_dir: str | None = None,
+) -> str | None:
+    """Additively commit source elements an existing repo group is missing.
+
+    `virtualize_matrix` rebuilds a group from scratch (it `del`s the group first), so
+    it can't extend a repo you don't want to re-virtualize. This opens the *existing*
+    `group` writable and commits only the requested `elements` that the source has but
+    the repo lacks — every already-committed ref is left untouched (Icechunk is
+    versioned; this is one commit on top). Use it to backfill `raw`/`uns` onto a group
+    built by an older, lossy builder without re-referencing gigabytes of X/obsm.
+
+    `elements` names top-level source keys to consider (default `raw` + `uns`); an
+    element already present in the repo group is skipped, so the call is idempotent.
+    Write target and source rules match `virtualize_matrix`: pass exactly one of
+    `repo_path` (local) or `repo` (an open, e.g. Arraylake, repo — which needs remote
+    source URLs). The source is indexed once (same download/registry path) to build the
+    new byte-range refs. Returns the snapshot id, or ``None`` if nothing was missing.
+    """
+    if (repo_path is None) == (repo is None):
+        raise ValueError("pass exactly one of repo_path (local) or repo (open repo)")
+
+    with _indexed_sources(source, download, cache_dir, repo is not None) as src:
+        # overwrite=False: reuse the existing repo/container, never recreate it.
+        repo = _make_repo(
+            repo_path, src.prefix, src.container_store, overwrite=False, repo=repo
+        )
+        session = repo.writable_session("main")
+        store = session.store
+
+        _virt_array, _virt_sparse, _native = _matrix_helpers(store, group, src)
+        g = zarr.open_group(store, mode="r+")
+        dst = g[group] if group else g
+
+        added: list[str] = []
+        with open_h5(src.read_paths[0]) as f0:
+            if "raw" in elements and "raw" in f0 and "raw" not in dst:
+                # big per-cell matrix → byte-range refs; var/varm copied native
+                _virt_sparse("raw/X", "raw/X")
+                _native("raw/var", "raw", "var")
+                if "varm" in f0["raw"]:
+                    _native("raw/varm", "raw", "varm")
+                dst["raw"].attrs.update(
+                    {"encoding-type": "raw", "encoding-version": "0.1.0"}
+                )
+                added.append("raw")
+            if "uns" in elements and "uns" in f0 and "uns" not in dst:
+                _native("uns", "", "uns")  # global metadata, from the first file
+                added.append("uns")
+
+        if not added:  # nothing missing — leave the repo untouched (no empty commit)
+            return None
+        return session.commit(
+            f"additively add {'/'.join(added)}" + (f" [{group}]" if group else "")
+        )
 
 
 def _write_obs_var(group_root, group: str | None, paths: list[str]) -> None:
