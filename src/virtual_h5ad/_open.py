@@ -54,7 +54,7 @@ def _as_repo(repo_or_path):
     )
 
 
-def _ensure_virtual_container(repo, group: str | None):
+def _ensure_virtual_container(repo, group: str | None, partial_values_concurrency=None):
     """Install the source's virtual-chunk container transiently if it isn't already.
 
     Arraylake forbids persisting `http(s)/file/memory` containers in a repo's config
@@ -81,6 +81,10 @@ def _ensure_virtual_container(repo, group: str | None):
     cfg.set_virtual_chunk_container(
         ic.VirtualChunkContainer(prefix, ic.http_store({"allow_http": "true"}))
     )
+    if partial_values_concurrency is not None:
+        # how many chunk/coalesced-span fetches icechunk keeps in flight (default 10);
+        # raise it so a big or multi-region selection fans out wider.
+        cfg.get_partial_values_concurrency = partial_values_concurrency
     return ic.Repository.open(
         repo.storage,
         config=cfg,
@@ -88,13 +92,53 @@ def _ensure_virtual_container(repo, group: str | None):
     )
 
 
-def open_root(repo_path, group: str | None = None, writable: bool = False):
-    """The repo's dataset Zarr group (root, or the named `group`), refs resolvable."""
-    repo = _ensure_virtual_container(_as_repo(repo_path), group)
-    session = (
-        repo.writable_session("main") if writable else repo.readonly_session("main")
+def open_root(
+    repo_path,
+    group: str | None = None,
+    writable: bool = False,
+    coalesce: bool = True,
+    max_gap: int = 64 * 1024,
+    partial_values_concurrency: int | None = None,
+):
+    """The repo's dataset Zarr group (root, or the named `group`), refs resolvable.
+
+    Reads use icechunk's native read **coalescing** by default (`coalesce=True`, via
+    `coalescing_zarr`'s codec pipeline over the native icechunk store): a selection's many
+    virtual-chunk fetches are merged, by real byte offset, into a few large range GETs.
+    A contiguous selection (e.g. one donor, whose CSR bytes are laid out in order)
+    collapses from thousands of latency-bound requests to a handful. `max_gap` is the
+    largest unread gap (bytes) bridged into one GET — the 64 KiB default costs a little
+    over-read for far fewer round-trips; `0` merges only strictly-adjacent chunks (zero
+    over-read). If the installed icechunk lacks native coalescing, this **degrades
+    gracefully** to plain reads. Pass `coalesce=False` to force the plain path.
+
+    `partial_values_concurrency` raises icechunk's in-flight fetch count (default 10) so
+    a big or multi-region selection (e.g. many donors at once) fans its coalesced spans
+    out wider.
+    """
+    repo = _ensure_virtual_container(
+        _as_repo(repo_path), group, partial_values_concurrency
     )
-    root = zarr.open_group(session.store, mode="r+" if writable else "r")
+    if writable:
+        session = repo.writable_session("main")
+        store = session.store
+    else:
+        session = repo.readonly_session("main")
+        store = session.store
+        if coalesce and hasattr(store, "get_many_chunks"):
+            try:
+                from coalescing_zarr import register_pipeline
+                from coalescing_zarr.pipeline import MAX_GAP_KEY
+
+                # New coalescing-zarr API: the codec pipeline reads through the
+                # native icechunk store's get_many_chunks — no store wrapper. The
+                # pipeline snapshots max_gap from zarr config when it builds the
+                # array's pipeline, so set it before open_group below.
+                zarr.config.set({MAX_GAP_KEY: max_gap})
+                register_pipeline()  # global; degrades to stock for non-native stores
+            except ImportError:
+                pass  # coalescing-zarr not installed → plain reads on session.store
+    root = zarr.open_group(store, mode="r+" if writable else "r")
     node = root[group] if group else root
     return (node, session) if writable else node
 
@@ -110,7 +154,13 @@ def open_matrix(repo_path, group: str | None = None):
 
 
 def open_anndata(
-    repo_path, group: str | None = None, obs_columns: list[str] | None = None
+    repo_path,
+    group: str | None = None,
+    obs_columns: list[str] | None = None,
+    obsm_keys: list[str] | None = None,
+    coalesce: bool = True,
+    max_gap: int = 64 * 1024,
+    partial_values_concurrency: int | None = None,
 ):
     """Open the repo as an AnnData with a lazy, virtual X over the whole collection.
 
@@ -122,15 +172,28 @@ def open_anndata(
 
     By default the **full** `obs` is loaded, reading its columns concurrently (see
     `_read_obs`) so the many small reads overlap. Pass `obs_columns` (a list of
-    names) only when you deliberately want a subset plus the row index.
+    names) only when you deliberately want a subset plus the row index. Likewise
+    `obsm_keys` selects which embeddings to attach (default: all present) — pass a
+    subset (e.g. ``["X_umap"]``) to avoid streaming embeddings you won't use, since
+    `to_memory` materializes every attached `obsm`.
+
+    Reads coalesce by default (see `open_root`) — a big speedup for contiguous
+    selections like a donor or a small cohort of donors.
     """
     import anndata as ad
     import anndata.io as aio
 
-    root = open_root(repo_path, group)
+    root = open_root(
+        repo_path,
+        group,
+        coalesce=coalesce,
+        max_gap=max_gap,
+        partial_values_concurrency=partial_values_concurrency,
+    )
     obsm = {}
     if "obsm" in root:
-        obsm = {k: root["obsm"][k] for k in list(root["obsm"].array_keys())}
+        keys = obsm_keys if obsm_keys is not None else list(root["obsm"].array_keys())
+        obsm = {k: root["obsm"][k] for k in keys}
     return ad.AnnData(
         X=aio.sparse_dataset(root[MATRIX_GROUP]),
         obs=_read_obs(root["obs"], obs_columns),

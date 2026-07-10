@@ -4,6 +4,12 @@ Virtually ingest AnnData `.h5ad` files into [Icechunk](https://icechunk.io) usin
 [VirtualiZarr](https://virtualizarr.readthedocs.io) — referencing the HDF5 byte
 ranges as Zarr instead of copying the data.
 
+**Note - Tech Demo**
+
+This is very much in tech demo status. Virtualizing these is absolutely possible, but in getting there I found several performance improvement opportunities up and down the stack. So this uses some branchs of virtualizarr, zarr, and icechunk. ALl of which I plan to upstream so this work well by default.
+
+That said, intial results are extremely promising I can make fairly high performance selections of subsets without downloading the entire files!
+
 ## Quick start
 
 ```bash
@@ -44,6 +50,7 @@ uv run python tutorial/virtualize_collection.py data/collection/shard_*.h5ad --r
 ## Status
 
 Working:
+
 - Virtualizing sparse CSR `X` — single file, a multi-sample collection, and **one
   logical matrix across the collection** via rectilinear chunk grids (~99%
   virtual, byte-identical roundtrips).

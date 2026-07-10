@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.14.1",
     "anndata>=0.12.17",
+    "coalescing-zarr",
     "h5py>=3.16.0",
     "icechunk>=2.0.6",
     "matplotlib>=3.11.0",
@@ -36,3 +37,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/virtual_h5ad"]
+
+# icechunk's native get_many_chunks is not in a released version yet, so pull the
+# forked build. Mirror coalescing-zarr's per-platform wheel table so the two agree
+# (a single differing source for icechunk would make uv's resolver conflict).
+[tool.uv.sources]
+coalescing-zarr = { git = "https://github.com/ianhi/coalescing-zarr" }
+icechunk = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'" },
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl", marker = "sys_platform == 'win32'" },
+]

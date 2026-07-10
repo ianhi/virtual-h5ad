@@ -2,8 +2,18 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.14'",
-    "python_full_version < '3.14'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and sys_platform == 'win32'",
+    "(python_full_version < '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 
 [[package]]
@@ -249,7 +259,12 @@ dependencies = [
     { name = "click" },
     { name = "donfig" },
     { name = "httpx" },
-    { name = "icechunk" },
+    { name = "icechunk", version = "2.1.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "numpy" },
     { name = "packaging" },
     { name = "pydantic", extra = ["email"] },
@@ -605,6 +620,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/27/fb/576f067976d320f5f0114a8d9fa1215425441bb35627b1993e5afd8111e5/cloudpickle-3.1.2.tar.gz", hash = "sha256:7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414", size = 22330, upload-time = "2025-11-03T09:25:26.604Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl", hash = "sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a", size = 22228, upload-time = "2025-11-03T09:25:25.534Z" },
+]
+
+[[package]]
+name = "coalescing-zarr"
+version = "0.1.0"
+source = { git = "https://github.com/ianhi/coalescing-zarr#81bf41ddebcc189e2d3ff6edddc5eb6f22e700d6" }
+dependencies = [
+    { name = "icechunk", version = "2.1.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "numpy" },
+    { name = "obstore" },
+    { name = "virtualizarr" },
+    { name = "xarray" },
+    { name = "zarr" },
 ]
 
 [[package]]
@@ -1325,44 +1358,114 @@ wheels = [
 
 [[package]]
 name = "icechunk"
-version = "2.0.6"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version < '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+]
 dependencies = [
-    { name = "zarr" },
+    { name = "zarr", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/c3/c43ce00558a545c93b7891697656c4dabc276414fc45466c26bb359847be/icechunk-2.0.6.tar.gz", hash = "sha256:7bf5660188ea1ee7e5487fa4733f36fb3de779ebbb160aa9b1117cbc0df2157d", size = 3344079, upload-time = "2026-06-04T21:35:52.726Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/f1/1e906af5b1f95e9e833611c7b0b7ced4b8e436e5f2c0343540c58ffc5c13/icechunk-2.1.0.tar.gz", hash = "sha256:5acce7b17b02f9fb191b8ea37b5851da026453c83bd74e291c53f07c60416260", size = 3518452, upload-time = "2026-06-29T22:53:28.94Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/bc/0439099c547e19cc51a1f08f1c2261ece866b4738144227aec46db639400/icechunk-2.0.6-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:c158f4d503451e62fe6f80d213dc99689fa49787258028e58562905cfe8f8db7", size = 16862055, upload-time = "2026-06-04T21:36:18.034Z" },
-    { url = "https://files.pythonhosted.org/packages/c3/f9/647283b2b272d3aa20f264f9db4a9f58ba76d8b3623ffc6e1c24ecd8326a/icechunk-2.0.6-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ed652239f3f6b0a293e5b746babf420942b1307f802f7d5a8ad5f31a3ccb40a9", size = 15553982, upload-time = "2026-06-04T21:36:11.197Z" },
-    { url = "https://files.pythonhosted.org/packages/20/7c/0f24607e6c1d08ed93df7a67b86f94e0e971222cbad39786761d355e0c11/icechunk-2.0.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3cd1722da41443c811d113fbeee972cee0e7db67771bf6a58beaa0f0a5f50493", size = 17241116, upload-time = "2026-06-04T21:36:03.665Z" },
-    { url = "https://files.pythonhosted.org/packages/0a/05/b13109cefad82394139d15b08b64249bbdb78026028a92cb234f4d84385d/icechunk-2.0.6-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:4276c3712a2a92be2fce3cabbbba0563af12b2a90ef579a1d5cc6f0740ce732d", size = 16887134, upload-time = "2026-06-04T21:35:45.441Z" },
-    { url = "https://files.pythonhosted.org/packages/b3/0e/89dc65adf8d5c7fe9628b47c5feb32b7033f3c5755278d492d3e1953a28b/icechunk-2.0.6-cp312-cp312-manylinux_2_28_armv7l.whl", hash = "sha256:337094452f5c07264b37477ab0f63ac164b77d0f79e218053c7ab86cbfa9e3d8", size = 16719325, upload-time = "2026-06-04T21:35:54.319Z" },
-    { url = "https://files.pythonhosted.org/packages/ab/4e/0687099b5e616e409d403290269d5eaad0835ad39c0c4a8d14330cf6398d/icechunk-2.0.6-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:ec4b60b75c4e511a2296cbe3c5b476bedb9101e074c05de737a9d1c6b99fa77c", size = 17120218, upload-time = "2026-06-04T21:36:24.578Z" },
-    { url = "https://files.pythonhosted.org/packages/4d/dd/dba49824fb1ce42f2ec7812d9ee401b640d4de492686f7b7037f5a9c12db/icechunk-2.0.6-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:fb05ffeb89e7ca2fc905154b53ab31225dab13556bb1b8eff674700cf747e065", size = 16886145, upload-time = "2026-06-04T21:36:31.113Z" },
-    { url = "https://files.pythonhosted.org/packages/3d/82/2ebd411fd09d6611beb2e944a27eba1efe27e8e47879229a21979714ca02/icechunk-2.0.6-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:728c15e3c6f834c08adc0f689e51916fe671243b57dc8f99140df1486e7dfa6b", size = 16972190, upload-time = "2026-06-04T21:36:37.849Z" },
-    { url = "https://files.pythonhosted.org/packages/e9/13/ff8344875f968dde3d3c09c1e83203a2d7d5582d2833ae96eb2a8d660352/icechunk-2.0.6-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:d6fe11179e98157a8ccc549d5cf59ee80737c208f62faf9cf1cd77d99be7e54e", size = 17644992, upload-time = "2026-06-04T21:36:44.556Z" },
-    { url = "https://files.pythonhosted.org/packages/56/1a/dce9c269198fc6672c553389387a20663c3f83886e127d83ddda230d2a48/icechunk-2.0.6-cp312-cp312-win_amd64.whl", hash = "sha256:d307def9ec3d0c684a98b31e9ca730de96860436bc587fb45b1e302028f8fe97", size = 15972997, upload-time = "2026-06-04T21:36:52.335Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/ec/90870bd2539081ce8a8a4a3b25c9a98001d14cc81c0b311a2bbbbb93b6ba/icechunk-2.0.6-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:f1c7035dc809b3d6403ddfbfa5bc6a43daed69c2c02f7ac7cafd3651d0ba6670", size = 16861433, upload-time = "2026-06-04T21:36:20.156Z" },
-    { url = "https://files.pythonhosted.org/packages/90/16/31bf3edf9823dca06ac8a80576f559f0a9479b81cd3e1cd2100a22636e07/icechunk-2.0.6-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:bdf031111aa20f51558cac45e80751bffd7cd85825ed66457129987bcfe3d56a", size = 15551895, upload-time = "2026-06-04T21:36:13.431Z" },
-    { url = "https://files.pythonhosted.org/packages/31/b7/55368605465f7085c24ce53b173994e112bfee55b268d51597f09a6be3c7/icechunk-2.0.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c78906ade1fc80d6b320705cd3d509020b5093d074f1f78fe2a27503f1cff6a2", size = 17240911, upload-time = "2026-06-04T21:36:05.739Z" },
-    { url = "https://files.pythonhosted.org/packages/d2/76/a80702999fafedb4c2fa08dbbb535a5bbcf65e875fe64f77d74e4ec6eadb/icechunk-2.0.6-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:811eb4b6bf068a1124c04b3a9b25d3d8793d4d936c004c4dd70c2aafdc7cef67", size = 16885273, upload-time = "2026-06-04T21:35:47.738Z" },
-    { url = "https://files.pythonhosted.org/packages/65/01/7a6c7134fe8a2adb9824bf2f7f6dd7b4aab1509b32d8d7034e6a72af2791/icechunk-2.0.6-cp313-cp313-manylinux_2_28_armv7l.whl", hash = "sha256:ce1f02575510b64762ec1feccaba96f0b63877808dcaa1675273a2d05845c858", size = 16718100, upload-time = "2026-06-04T21:35:56.538Z" },
-    { url = "https://files.pythonhosted.org/packages/23/d8/091507fe3ae3384c1751cc3ac466f024e8577f7f23fad6e46438714f8a19/icechunk-2.0.6-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:c3c5a77448b69ee8e111dc68a2b5e903088ce5243bfc786bd76e7c06e63ee3cc", size = 17119603, upload-time = "2026-06-04T21:36:26.697Z" },
-    { url = "https://files.pythonhosted.org/packages/d3/8b/2acdfa9090ef95a04a605de6d85f9833ebf781333d149cb75a106cc03e25/icechunk-2.0.6-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:4ba2a5ccac290d483d164884bf6f1a33079bd8eed1429d4ac99f158fbe7682be", size = 16885831, upload-time = "2026-06-04T21:36:33.188Z" },
-    { url = "https://files.pythonhosted.org/packages/33/a8/65cf48ce67c523cbc7aac96b62984a9e1972da12f49a5ea2f4cdef630865/icechunk-2.0.6-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:14f72c739dc7fc3fc3b0bd8e88b0f416a8ae4455320e26804c8e12d5a71e035c", size = 16971822, upload-time = "2026-06-04T21:36:39.993Z" },
-    { url = "https://files.pythonhosted.org/packages/ae/e2/cbc71a03e6baf7954ead5257b1162e4896705c4f7624e8b26da194807355/icechunk-2.0.6-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:f8670a76b8508effc0eb82667696c9642c122f2485c0038de8b6ce56421c7cd7", size = 17644161, upload-time = "2026-06-04T21:36:46.83Z" },
-    { url = "https://files.pythonhosted.org/packages/53/bf/d7ebab6c2765c5b7cb33380190dbff489532893e0ef912d9113ab416c0ac/icechunk-2.0.6-cp313-cp313-win_amd64.whl", hash = "sha256:2b68c523ee8367c9467e6818f9858cfea5da89defe4696d59ebefba850e6992a", size = 15971208, upload-time = "2026-06-04T21:36:54.679Z" },
-    { url = "https://files.pythonhosted.org/packages/2e/00/8d2e2386827fd92def82d805ba1e4d013fb44c00d92dff78dbfd5e951f80/icechunk-2.0.6-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:a74012da2d83cf309521766c73f91a1a2a373b2774b6269384971e285da40a13", size = 16867623, upload-time = "2026-06-04T21:36:22.508Z" },
-    { url = "https://files.pythonhosted.org/packages/5b/05/6d4eaa5afe2952dd4c4a1a073da9244f3d2911fd098b0342a54f824301e9/icechunk-2.0.6-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a3d417af54f44995f4411c1bfa100355f1cc9b082880ec4411669e28e9a42656", size = 15560697, upload-time = "2026-06-04T21:36:15.661Z" },
-    { url = "https://files.pythonhosted.org/packages/00/03/17e1d02f4c7cf2958724992382d7d99fa1aaddb8f13404bf6c84c19f341b/icechunk-2.0.6-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2d68ffe631e2c12dfb09f8bfac055c3ab3dd897e4ef7b6ec1b067b8efdf9d5ed", size = 17249891, upload-time = "2026-06-04T21:36:08.22Z" },
-    { url = "https://files.pythonhosted.org/packages/ff/74/49ef76b6ec4389a0cdd6caeff47a2375ef5d1828dae6e25d02df9095e9c5/icechunk-2.0.6-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:67e7748888c50c8c62c5b5a7e832b26f66af497f5f278478a45bd7f98cfbec76", size = 16893554, upload-time = "2026-06-04T21:35:50.619Z" },
-    { url = "https://files.pythonhosted.org/packages/9b/b5/8a17f210d536bc877ba95c8e85501ce889613a57915934f4101316318b06/icechunk-2.0.6-cp314-cp314-manylinux_2_28_armv7l.whl", hash = "sha256:e56a07e6daa4299b9c30c4cbfcc68f82063286e3a0ade8aabcdf64bd452dce6e", size = 16725746, upload-time = "2026-06-04T21:36:01.049Z" },
-    { url = "https://files.pythonhosted.org/packages/f6/6e/87e48f05c2bf0e6fd3c1c900405a20c739ef05b29fde2e92fdd11cf9d431/icechunk-2.0.6-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:36bf455e7c079c03d1c41135ac0b6f07450f97b1cb9031b603c59d8cc47e35ad", size = 17129051, upload-time = "2026-06-04T21:36:29.061Z" },
-    { url = "https://files.pythonhosted.org/packages/8a/42/eddeb4a6186e5c9a889869292fc26309ae9306a1aa96c7d99566bae75ad9/icechunk-2.0.6-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:e7c0ecff0c4a25f826cd2e6f576c7e882c1398c1c0cd7271b0fef8bea75588b8", size = 16892132, upload-time = "2026-06-04T21:36:35.784Z" },
-    { url = "https://files.pythonhosted.org/packages/16/be/d9c581d1b351b89a440e20475c643f58ac669a487ece98841b9e28741f19/icechunk-2.0.6-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:c3a7bbaccfe8b5cd563e36bc40483b83c83b74fb380a03fd809159e4bc936da9", size = 16976002, upload-time = "2026-06-04T21:36:42.18Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/ce/f431e35efbc7c228f4bdc1fd2aebf54e50667aa9aad8183920cda9927255/icechunk-2.0.6-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:a17d59a35225fa5dd84b3680fe0d0f6a5beecd591d65d2ca047f09884f6a810f", size = 17650995, upload-time = "2026-06-04T21:36:49.779Z" },
-    { url = "https://files.pythonhosted.org/packages/54/f7/cfa90a242336f693d64b610c140011c6e456c47cbbb18caf8f6c4dbaeb95/icechunk-2.0.6-cp314-cp314-win_amd64.whl", hash = "sha256:7b4a22821e05a636f9060377dc58060c272e131cce2c4756213aba4c3c93a4c4", size = 15984769, upload-time = "2026-06-04T21:36:56.887Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/b2/f16b67330e28b2d0eddce475d502e988cce54f65f9fa0a6d64bf8a0ab3e5/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl", hash = "sha256:30504fe5a868ed2221df0792f0e098e33d466ded4de2861e33ef5bb5843306cd", size = 17433683, upload-time = "2026-06-29T22:53:35.256Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/e0/fcbb8997cc7ee42056463ad464fd807dc1a642fbf0838dcede215d03883d/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:c55af8265ff54db8e180c60033fbe31a0662f32de9d60207f827ab39a4df1b44", size = 16118756, upload-time = "2026-06-29T22:53:33.067Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/56/20a624039a4a705f0818e9167e312539552bd664aa5f347522ccc6fd7f02/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:330158c1f0aebf745c2034d0059cacd3974f929ed663b4ce0b53a88fff16fffb", size = 17814804, upload-time = "2026-06-29T22:53:30.44Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/c0/bda2ffd78d1393586bb26afdb651d1fcb33afc8d83b73f4fde38e535e928/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:8cfa340f214604a2b2e8c69bcf07007569826ce6919e2c7af3d493754c4cc40d", size = 17475475, upload-time = "2026-06-29T22:53:26.705Z" },
+    { url = "https://files.pythonhosted.org/packages/17/45/0f3ace15826fc7d5d167e37f2736a4949adf041d7bf708f851238948b50d/icechunk-2.1.0-cp312-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:52b3bde69c73fa5c56e55ded68d492ab00b4c5449a7d5f5c788e2fa563f71e85", size = 17680066, upload-time = "2026-06-29T22:53:37.668Z" },
+    { url = "https://files.pythonhosted.org/packages/95/25/a5a2629407f09f614215612f6805fa5438de9a43a6558f32c299cacdf676/icechunk-2.1.0-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:19af6d020692e3bf164655cdea5fa20bdcb89200ee825b6eb57e041f9d1887b4", size = 18248292, upload-time = "2026-06-29T22:53:40.029Z" },
 ]
+
+[[package]]
+name = "icechunk"
+version = "2.1.0"
+source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "zarr", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl", hash = "sha256:2fbb008d01c984b278e28d8e30c0b0339c0e1d688f48ce35531bb1ac8d5442d4" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "zarr", specifier = ">=3.1.0" }]
+
+[[package]]
+name = "icechunk"
+version = "2.1.0"
+source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "zarr", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:ff3813a60a2a7754bc6a90d42507fe438a11e32807f81ac99902f66e4d627ed7" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "zarr", specifier = ">=3.1.0" }]
+
+[[package]]
+name = "icechunk"
+version = "2.1.0"
+source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+dependencies = [
+    { name = "zarr", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
+wheels = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:99c63c67a2858e55a25555e5af368c2e228f3b4bfc26d0fa6a01086e556877c1" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "zarr", specifier = ">=3.1.0" }]
+
+[[package]]
+name = "icechunk"
+version = "2.1.0"
+source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+]
+dependencies = [
+    { name = "zarr", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+]
+wheels = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:bf94435b528a2d4682b7fbdf126b8ae38d800b3c372b9601ccfe6a40b8e44dc1" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "zarr", specifier = ">=3.1.0" }]
+
+[[package]]
+name = "icechunk"
+version = "2.1.0"
+source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version < '3.14' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "zarr", marker = "sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl", hash = "sha256:e69a5a0b7adf61186291e9c6101973c498c3d5384a897685d0553a3dc6808352" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "zarr", specifier = ">=3.1.0" }]
 
 [[package]]
 name = "idna"
@@ -1720,7 +1823,7 @@ dependencies = [
     { name = "nbformat" },
     { name = "packaging" },
     { name = "prometheus-client" },
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (os_name == 'nt' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux')" },
     { name = "pyzmq" },
     { name = "send2trash" },
     { name = "terminado" },
@@ -1751,7 +1854,7 @@ name = "jupyter-server-terminals"
 version = "0.5.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (os_name == 'nt' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux')" },
     { name = "terminado" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f4/a7/bcd0a9b0cbba88986fe944aaaf91bfda603e5a50bda8ed15123f381a3b2f/jupyter_server_terminals-0.5.4.tar.gz", hash = "sha256:bbda128ed41d0be9020349f9f1f2a4ab9952a73ed5f5ac9f1419794761fb87f5", size = 31770, upload-time = "2026-01-14T16:53:20.213Z" }
@@ -2716,7 +2819,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -3899,7 +4002,7 @@ version = "0.18.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ptyprocess", marker = "os_name != 'nt'" },
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (os_name == 'nt' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux')" },
     { name = "tornado" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8a/11/965c6fd8e5cc254f1fe142d547387da17a8ebfd75a3455f637c663fb38a0/terminado-0.18.1.tar.gz", hash = "sha256:de09f2c4b85de4765f7714688fff57d3e75bad1f909b589fde880460c753fd2e", size = 32701, upload-time = "2024-03-12T14:34:39.026Z" }
@@ -4150,8 +4253,14 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "anndata" },
+    { name = "coalescing-zarr" },
     { name = "h5py" },
-    { name = "icechunk" },
+    { name = "icechunk", version = "2.1.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "obstore" },
@@ -4177,8 +4286,14 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.1" },
     { name = "anndata", specifier = ">=0.12.17" },
+    { name = "coalescing-zarr", git = "https://github.com/ianhi/coalescing-zarr" },
     { name = "h5py", specifier = ">=3.16.0" },
-    { name = "icechunk", specifier = ">=2.0.6" },
+    { name = "icechunk", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')", specifier = ">=2.0.6" },
+    { name = "icechunk", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" },
+    { name = "icechunk", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" },
+    { name = "icechunk", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" },
+    { name = "icechunk", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
+    { name = "icechunk", marker = "sys_platform == 'win32'", url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" },
     { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "obstore", specifier = ">=0.10.1" },
@@ -4226,7 +4341,12 @@ hdf = [
     { name = "imagecodecs-numcodecs" },
 ]
 icechunk = [
-    { name = "icechunk" },
+    { name = "icechunk", version = "2.1.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "icechunk", version = "2.1.0", source = { url = "https://github.com/ianhi/icechunk/releases/download/fork-coalescing-wip/icechunk-2.1.0-cp312-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
 ]
 
 [[package]]

@@ -58,6 +58,7 @@ coverage.xml
 .jupyter/
 .jupyter_ystore.db
 *.ystore.db
+*.ystore.db.bak*
 
 # IDEs / OS
 .idea/
